@@ -1,22 +1,23 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Customer, Contract, Installment } from '../types';
 import { initialCustomers, initialContracts, initialInstallments } from '../data/initialData';
+import { nhost } from '../lib/nhost';
 
 interface AppContextType {
   isAuthenticated: boolean;
-  login: (u: string, p: string) => boolean;
+  login: (u: string, p: string) => Promise<boolean>;
   logout: () => void;
   user: { name: string; email: string } | null;
   
   customers: Customer[];
-  addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Customer;
-  updateCustomer: (c: Customer) => void;
-  deleteCustomer: (id: string) => void;
+  addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
+  updateCustomer: (c: Customer) => Promise<void>;
+  deleteCustomer: (id: string) => Promise<void>;
   
   contracts: Contract[];
-  addContract: (c: Omit<Contract, 'id' | 'createdAt' | 'status'>) => void;
-  updateContract: (c: Contract) => void;
-  deleteContract: (id: string) => void;
+  addContract: (c: Omit<Contract, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  updateContract: (c: Contract) => Promise<void>;
+  deleteContract: (id: string) => Promise<void>;
   
   installments: Installment[];
   payInstallment: (params: {
@@ -27,10 +28,11 @@ interface AppContextType {
     applyDailyFee?: boolean;
     feeDays?: number;
     note?: string;
-  }) => void;
+  }) => Promise<void>;
   
   calculateLateFee: (installment: Installment) => number;
   formatCurrency: (val: number) => string;
+  fetchRemoteData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -72,42 +74,166 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('credmais_installments', JSON.stringify(installments));
   }, [installments]);
 
-  const login = (u: string, p: string) => {
+  // Nhost GraphQL helper for fetching data
+  const fetchRemoteData = async () => {
+    try {
+      const query = `
+        query GetCredMaisData {
+          customers {
+            id name email phone birth_date cpf rg cep address number complement notes created_at
+          }
+          contracts {
+            id contract_number customer_id customer_name start_date amount interest_rate period_days total_installments installment_amount total_to_receive daily_late_fee notes status created_at
+          }
+          installments {
+            id contract_id installment_number total_installments due_date original_amount daily_late_fee paid_amount paid_date status created_at
+          }
+        }
+      `;
+      const res = await nhost.graphql.request({ query });
+      if (res && (res as any).body?.data) {
+        const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = (res as any).body.data;
+        if (remoteCust && remoteCust.length > 0) {
+          setCustomers(remoteCust.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            email: c.email || '',
+            phone: c.phone || '',
+            birthDate: c.birth_date || '',
+            cpf: c.cpf || '',
+            rg: c.rg || '',
+            cep: c.cep || '',
+            address: c.address || '',
+            number: c.number || '',
+            complement: c.complement || '',
+            notes: c.notes || '',
+            createdAt: c.created_at
+          })));
+        }
+
+        if (remoteCnt && remoteCnt.length > 0) {
+          setContracts(remoteCnt.map((c: any) => ({
+            id: c.id,
+            contractNumber: c.contract_number,
+            customerId: c.customer_id,
+            customerName: c.customer_name,
+            startDate: c.start_date,
+            amount: Number(c.amount),
+            interestRate: Number(c.interest_rate),
+            periodDays: Number(c.period_days),
+            totalInstallments: Number(c.total_installments),
+            installmentAmount: Number(c.installment_amount),
+            totalToReceive: Number(c.total_to_receive),
+            dailyLateFee: Number(c.daily_late_fee),
+            notes: c.notes || '',
+            status: c.status,
+            createdAt: c.created_at
+          })));
+        }
+
+        if (remoteInst && remoteInst.length > 0) {
+          setInstallments(remoteInst.map((i: any) => ({
+            id: i.id,
+            contractId: i.contract_id,
+            installmentNumber: i.installment_number,
+            totalInstallments: i.total_installments,
+            dueDate: i.due_date,
+            originalAmount: Number(i.original_amount),
+            dailyLateFee: Number(i.daily_late_fee),
+            paidAmount: Number(i.paid_amount || 0),
+            paidDate: i.paid_date || undefined,
+            status: i.status
+          })));
+        }
+      }
+    } catch (err) {
+      console.log('Utilizando modo local / offline Nhost');
+    }
+  };
+
+  useEffect(() => {
+    fetchRemoteData();
+  }, []);
+
+  const login = async (u: string, p: string) => {
     if (u && p) {
+      try {
+        const res = await nhost.auth.signInEmailPassword({ email: u, password: p });
+        if (res && (res as any).body?.session?.user) {
+          const userObj = {
+            name: (res as any).body.session.user.displayName || 'Operador CredMais',
+            email: (res as any).body.session.user.email || u
+          };
+          setUser(userObj);
+          localStorage.setItem('credmais_user', JSON.stringify(userObj));
+        }
+      } catch (e) {
+        // Fallback demo user
+      }
       setIsAuthenticated(true);
       localStorage.setItem('credmais_auth', 'true');
-      const uObj = { name: 'Marcos Paulo', email: u };
-      setUser(uObj);
-      localStorage.setItem('credmais_user', JSON.stringify(uObj));
       return true;
     }
     return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await nhost.auth.signOut({});
+    } catch (e) {}
     setIsAuthenticated(false);
     localStorage.removeItem('credmais_auth');
   };
 
-  const addCustomer = (cData: Omit<Customer, 'id' | 'createdAt'>) => {
+  const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>) => {
     const newCust: Customer = {
       ...cData,
       id: `cust-${Date.now()}`,
       createdAt: new Date().toISOString().split('T')[0]
     };
+
     setCustomers(prev => [newCust, ...prev]);
+
+    try {
+      const mutation = `
+        mutation InsertCustomer($object: customers_insert_input!) {
+          insert_customers_one(object: $object) {
+            id
+          }
+        }
+      `;
+      await nhost.graphql.request({
+        query: mutation,
+        variables: {
+          object: {
+            name: cData.name,
+            email: cData.email,
+            phone: cData.phone,
+            birth_date: cData.birthDate || null,
+            cpf: cData.cpf,
+            rg: cData.rg,
+            cep: cData.cep,
+            address: cData.address,
+            number: cData.number,
+            complement: cData.complement,
+            notes: cData.notes
+          }
+        }
+      });
+    } catch (e) {}
+
     return newCust;
   };
 
-  const updateCustomer = (updated: Customer) => {
+  const updateCustomer = async (updated: Customer) => {
     setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
 
-  const deleteCustomer = (id: string) => {
+  const deleteCustomer = async (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
   };
 
-  const addContract = (cntData: Omit<Contract, 'id' | 'createdAt' | 'status'>) => {
+  const addContract = async (cntData: Omit<Contract, 'id' | 'createdAt' | 'status'>) => {
     const newId = `cnt-${Date.now()}`;
     const newContract: Contract = {
       ...cntData,
@@ -140,11 +266,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setInstallments(prev => [...newInstallments, ...prev]);
   };
 
-  const updateContract = (updated: Contract) => {
+  const updateContract = async (updated: Contract) => {
     setContracts(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
 
-  const deleteContract = (id: string) => {
+  const deleteContract = async (id: string) => {
     setContracts(prev => prev.filter(c => c.id !== id));
     setInstallments(prev => prev.filter(i => i.contractId !== id));
   };
@@ -165,7 +291,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 0;
   };
 
-  const payInstallment = ({
+  const payInstallment = async ({
     installmentId,
     type,
     amountPaid,
@@ -254,7 +380,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       installments,
       payInstallment,
       calculateLateFee,
-      formatCurrency
+      formatCurrency,
+      fetchRemoteData
     }}>
       {children}
     </AppContext.Provider>
