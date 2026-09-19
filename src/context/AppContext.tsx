@@ -46,6 +46,51 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+export const translateAuthError = (err: any): string => {
+  if (!err) return 'Ocorreu um erro inesperado. Tente novamente.';
+  
+  let msg = '';
+  if (typeof err === 'string') {
+    msg = err;
+  } else if (err.message && typeof err.message === 'string') {
+    msg = err.message;
+  } else if (err.error && typeof err.error === 'string') {
+    msg = err.error;
+  } else if (err.body?.error?.message) {
+    msg = err.body.error.message;
+  } else {
+    msg = JSON.stringify(err);
+  }
+
+  const lower = msg.toLowerCase();
+
+  if (lower.includes('password is too short') || lower.includes('password-too-short') || (lower.includes('password') && lower.includes('short'))) {
+    return 'A senha é muito curta. Informe no mínimo 8 caracteres (letras e números).';
+  }
+  if (lower.includes('password is too weak') || lower.includes('weak_password')) {
+    return 'A senha é muito fraca. Digite uma combinação de letras e números com no mínimo 8 caracteres.';
+  }
+  if (lower.includes('user already exists') || lower.includes('user-already-exists') || lower.includes('email already in use') || lower.includes('already exists')) {
+    return 'Este e-mail já está cadastrado no sistema. Tente fazer login ou recupere sua senha.';
+  }
+  if (lower.includes('invalid email') || lower.includes('invalid-email')) {
+    return 'Por favor informe um e-mail válido.';
+  }
+  if (lower.includes('invalid email or password') || lower.includes('incorrect email') || lower.includes('invalid-email-password')) {
+    return 'E-mail ou senha incorretos. Verifique suas credenciais.';
+  }
+  if (lower.includes('email not verified') || lower.includes('unverified')) {
+    return 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+  }
+
+  // Fallback translation if English message returned
+  if (/[a-zA-Z]/.test(msg) && (lower.includes('password') || lower.includes('user') || lower.includes('error') || lower.includes('invalid'))) {
+    return 'Não foi possível concluir o cadastro com os dados informados. Verifique se a senha tem pelo menos 8 caracteres.';
+  }
+
+  return msg;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return localStorage.getItem('credmais_auth') === 'true';
@@ -174,7 +219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const errObj = (res as any)?.error || (res as any)?.body?.error;
         return { 
           success: false, 
-          error: errObj.message || 'E-mail ou senha incorretos. Verifique suas credenciais.' 
+          error: translateAuthError(errObj) 
         };
       }
 
@@ -192,7 +237,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: true };
       }
     } catch (e: any) {
-      return { success: false, error: e?.message || 'Falha ao conectar ao servidor Nhost.' };
+      return { success: false, error: translateAuthError(e) };
     }
 
     return { success: false, error: 'Credenciais inválidas. Verifique seu e-mail e senha.' };
@@ -214,29 +259,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if ((res as any)?.error || (res as any)?.body?.error || (res as any)?.status >= 400) {
-        const errObj = (res as any)?.error || (res as any)?.body?.error || {};
-        let rawMessage = errObj.message || (typeof res === 'string' ? res : JSON.stringify(res));
-
-        if (rawMessage.toLowerCase().includes('password is too short') || errObj.error === 'password-too-short') {
-          return { 
-            success: false, 
-            error: 'A senha é muito curta. Informe no mínimo 8 caracteres (letras e números).' 
-          };
-        } else if (rawMessage.toLowerCase().includes('user already exists') || errObj.error === 'user-already-exists') {
-          return { 
-            success: false, 
-            error: 'Este e-mail já está cadastrado no sistema.' 
-          };
-        } else if (rawMessage.toLowerCase().includes('invalid email') || errObj.error === 'invalid-email-password') {
-          return { 
-            success: false, 
-            error: 'Por favor informe um e-mail válido.' 
-          };
-        }
-        
+        const errObj = (res as any)?.error || (res as any)?.body?.error || res;
         return { 
           success: false, 
-          error: errObj.message || 'Erro ao realizar cadastro no Nhost.' 
+          error: translateAuthError(errObj) 
         };
       }
 
@@ -256,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
     } catch (e: any) {
-      return { success: false, error: e?.message || 'Erro ao conectar ao servidor de cadastro.' };
+      return { success: false, error: translateAuthError(e) };
     }
   };
 

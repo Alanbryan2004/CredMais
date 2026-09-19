@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, Mail, Phone, AlertCircle, ArrowRight, CheckCircle2, KeyRound, UserPlus, Eye, EyeOff } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp, translateAuthError } from '../context/AppContext';
 
 type AuthMode = 'LOGIN' | 'REGISTER' | 'RECOVER';
 
@@ -58,7 +58,7 @@ export const Login: React.FC = () => {
     const res = await login(email, password);
     setLoading(false);
     if (!res.success) {
-      setError(res.error || 'Falha na autenticação. Verifique seu e-mail e senha.');
+      setError(translateAuthError(res.error || 'Falha na autenticação. Verifique seu e-mail e senha.'));
     }
   };
 
@@ -93,7 +93,7 @@ export const Login: React.FC = () => {
     setLoading(false);
 
     if (!res.success) {
-      setError(res.error || 'Ocorreu um erro ao criar a conta.');
+      setError(translateAuthError(res.error || 'Ocorreu um erro ao criar a conta.'));
     }
   };
 
@@ -114,7 +114,7 @@ export const Login: React.FC = () => {
     if (res.success) {
       setSuccessMsg(res.message || 'Instruções enviadas para o seu e-mail!');
     } else {
-      setError(res.error || 'Ocorreu um erro ao solicitar a recuperação de senha.');
+      setError(translateAuthError(res.error || 'Ocorreu um erro ao solicitar a recuperação de senha.'));
     }
   };
 
