@@ -269,6 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    getOrFetchUserId();
     fetchRemoteData();
 
     // Auto sync background polling every 8 seconds
@@ -408,33 +409,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const getOrFetchUserId = async (): Promise<string | null> => {
-    try {
-      const userRes = await nhost.auth.getUser();
-      const u = (userRes as any)?.user || (userRes as any)?.body?.user || (userRes as any)?.data?.user || userRes;
-      if (u?.id && typeof u.id === 'string') {
-        if (!user?.id) {
-          const updatedUser = { 
-            id: u.id, 
-            name: u.displayName || user?.name || 'Usuário', 
-            email: u.email || user?.email || '' 
-          };
-          setUser(updatedUser);
-          localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
-        }
-        return u.id;
-      }
-    } catch (e) {}
-
-    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-    if (session?.user?.id) return session.user.id;
-    if (user?.id) return user.id;
+    if (user?.id && typeof user.id === 'string' && user.id.length > 10) {
+      return user.id;
+    }
 
     const savedUser = localStorage.getItem('credmais_user');
     if (savedUser) {
       try {
         const parsed = JSON.parse(savedUser);
-        if (parsed?.id) return parsed.id;
+        if (parsed?.id && typeof parsed.id === 'string' && parsed.id.length > 10) {
+          if (!user?.id) setUser(parsed);
+          return parsed.id;
+        }
       } catch (e) {}
+    }
+
+    try {
+      const userRes = await nhost.auth.getUser();
+      const u = (userRes as any)?.user || (userRes as any)?.body?.user || (userRes as any)?.data?.user || userRes;
+      if (u?.id && typeof u.id === 'string') {
+        const updatedUser = { 
+          id: u.id, 
+          name: u.displayName || user?.name || 'Usuário', 
+          email: u.email || user?.email || '' 
+        };
+        setUser(updatedUser);
+        localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
+        return u.id;
+      }
+    } catch (e) {}
+
+    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+    if (session?.user?.id) {
+      const updatedUser = {
+        id: session.user.id,
+        name: session.user.displayName || user?.name || 'Usuário',
+        email: session.user.email || user?.email || ''
+      };
+      setUser(updatedUser);
+      localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
+      return session.user.id;
     }
 
     return null;
