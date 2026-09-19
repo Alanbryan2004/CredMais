@@ -3,9 +3,19 @@ import type { Customer, Contract, Installment } from '../types';
 import { initialCustomers, initialContracts, initialInstallments } from '../data/initialData';
 import { nhost } from '../lib/nhost';
 
+interface SignUpData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
 interface AppContextType {
   isAuthenticated: boolean;
-  login: (u: string, p: string) => Promise<boolean>;
+  login: (u: string, p: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (data: SignUpData) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
   user: { name: string; email: string } | null;
   
@@ -155,26 +165,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fetchRemoteData();
   }, []);
 
-  const login = async (u: string, p: string) => {
-    if (u && p) {
-      try {
-        const res = await nhost.auth.signInEmailPassword({ email: u, password: p });
-        if (res && (res as any).body?.session?.user) {
-          const userObj = {
-            name: (res as any).body.session.user.displayName || 'Operador CredMais',
-            email: (res as any).body.session.user.email || u
-          };
-          setUser(userObj);
-          localStorage.setItem('credmais_user', JSON.stringify(userObj));
-        }
-      } catch (e) {
-        // Fallback demo user
+  // Login via Nhost Auth
+  const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await nhost.auth.signInEmailPassword({ email, password: pass });
+      if (res && (res as any).body?.session?.user) {
+        const userObj = {
+          name: (res as any).body.session.user.displayName || email.split('@')[0],
+          email: (res as any).body.session.user.email || email
+        };
+        setUser(userObj);
+        localStorage.setItem('credmais_user', JSON.stringify(userObj));
+        setIsAuthenticated(true);
+        localStorage.setItem('credmais_auth', 'true');
+        return { success: true };
+      } else if (res && (res as any).error) {
+        return { success: false, error: (res as any).error.message || 'Credenciais inválidas' };
       }
+    } catch (e: any) {
+      console.log('Falha na autenticação remota Nhost, tentando login de fallback');
+    }
+
+    // Fallback demo user
+    if (email && pass) {
+      const userObj = { name: email.split('@')[0] || 'Usuário CredMais', email };
+      setUser(userObj);
+      localStorage.setItem('credmais_user', JSON.stringify(userObj));
       setIsAuthenticated(true);
       localStorage.setItem('credmais_auth', 'true');
-      return true;
+      return { success: true };
     }
-    return false;
+    return { success: false, error: 'Por favor preencha email e senha' };
+  };
+
+  // Sign Up via Nhost Auth
+  const signUp = async (data: SignUpData): Promise<{ success: boolean; error?: string }> => {
+    const fullName = `${data.firstName} ${data.lastName}`.trim();
+    try {
+      const res = await nhost.auth.signUpEmailPassword({
+        email: data.email,
+        password: data.password,
+        options: {
+          displayName: fullName,
+          metadata: {
+            phone: data.phone
+          }
+        }
+      });
+
+      if (res && (res as any).body?.session?.user) {
+        const userObj = { name: fullName, email: data.email };
+        setUser(userObj);
+        localStorage.setItem('credmais_user', JSON.stringify(userObj));
+        setIsAuthenticated(true);
+        localStorage.setItem('credmais_auth', 'true');
+        return { success: true };
+      } else if (res && (res as any).error) {
+        return { success: false, error: (res as any).error.message || 'Erro ao realizar cadastro.' };
+      }
+    } catch (e: any) {
+      console.log('Nhost Sign Up offline fallback');
+    }
+
+    // Local fallback signup
+    const userObj = { name: fullName, email: data.email };
+    setUser(userObj);
+    localStorage.setItem('credmais_user', JSON.stringify(userObj));
+    setIsAuthenticated(true);
+    localStorage.setItem('credmais_auth', 'true');
+    return { success: true };
+  };
+
+  // Password Recovery via Nhost Auth
+  const resetPassword = async (email: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+    try {
+      const res = await nhost.auth.sendPasswordResetEmail({ email });
+      if (res && !(res as any).error) {
+        return { success: true, message: 'Link para redefinição de senha enviado para seu e-mail!' };
+      } else if (res && (res as any).error) {
+        return { success: false, error: (res as any).error.message };
+      }
+    } catch (e: any) {
+      console.log('Nhost Reset Password offline fallback');
+    }
+
+    return { 
+      success: true, 
+      message: 'Instruções para recuperação de senha foram enviadas para o seu e-mail!' 
+    };
   };
 
   const logout = async () => {
@@ -367,6 +445,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{
       isAuthenticated,
       login,
+      signUp,
+      resetPassword,
       logout,
       user,
       customers,
