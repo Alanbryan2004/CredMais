@@ -17,7 +17,7 @@ interface AppContextType {
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
-  user: { name: string; email: string } | null;
+  user: { id?: string; name: string; email: string } | null;
   
   isSyncing: boolean;
   refreshData: () => Promise<void>;
@@ -107,7 +107,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('credmais_auth') === 'true';
   });
 
-  const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
+  const [user, setUser] = useState<{ id?: string; name: string; email: string } | null>(() => {
     const saved = localStorage.getItem('credmais_user');
     return saved ? JSON.parse(saved) : { name: 'Marcos Paulo', email: 'admin@credmais.com' };
   });
@@ -296,6 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const session = (res as any)?.body?.session || (res as any)?.session;
       if (session?.user) {
         const userObj = {
+          id: session.user.id,
           name: session.user.displayName || email.split('@')[0],
           email: session.user.email || email
         };
@@ -338,7 +339,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const session = (res as any)?.body?.session || (res as any)?.session;
       if (session?.user) {
-        const userObj = { name: fullName, email: data.email };
+        const userObj = { 
+          id: session.user.id,
+          name: fullName, 
+          email: data.email 
+        };
         setUser(userObj);
         localStorage.setItem('credmais_user', JSON.stringify(userObj));
         setIsAuthenticated(true);
@@ -402,6 +407,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('credmais_installments');
   };
 
+  const getCurrentUserId = (): string | null => {
+    try {
+      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+      if (session?.user?.id) return session.user.id;
+      const u = (nhost.auth as any)?.getUser?.();
+      if (u?.id) return u.id;
+      if (user?.id) return user.id;
+      const savedUser = localStorage.getItem('credmais_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.id) return parsed.id;
+      }
+    } catch (e) {}
+    return null;
+  };
+
   const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>) => {
     const newCust: Customer = {
       ...cData,
@@ -419,7 +440,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const userId = session?.user?.id;
+      const userId = getCurrentUserId();
       const insertObj: any = {
         name: cData.name,
         email: cData.email,
@@ -499,7 +520,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
       const token = session?.accessToken;
-      const userId = session?.user?.id;
+      const userId = getCurrentUserId();
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
