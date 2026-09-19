@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, Phone, AlertCircle, ArrowRight, CheckCircle2, KeyRound, UserPlus } from 'lucide-react';
+import { Lock, Mail, Phone, AlertCircle, ArrowRight, CheckCircle2, KeyRound, UserPlus, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 type AuthMode = 'LOGIN' | 'REGISTER' | 'RECOVER';
@@ -8,11 +8,15 @@ export const Login: React.FC = () => {
   const { login, signUp, resetPassword } = useApp();
   const [mode, setMode] = useState<AuthMode>('LOGIN');
 
+  // Password visibility states
+  const [showPassword, setShowPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
   // Login Form state
   const [email, setEmail] = useState('admin@credmais.com');
-  const [password, setPassword] = useState('123456');
+  const [password, setPassword] = useState('12345678');
 
-  // Register Form state (Nome, Sobrenome, Email, Telefone, Senha, Confirmar Senha)
+  // Register Form state
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -32,6 +36,8 @@ export const Login: React.FC = () => {
     setError('');
     setSuccessMsg('');
     setLoading(false);
+    setShowPassword(false);
+    setShowRegPassword(false);
   };
 
   const handleSwitchMode = (newMode: AuthMode) => {
@@ -56,7 +62,7 @@ export const Login: React.FC = () => {
     }
   };
 
-  // Submit Register (Nome, Sobrenome, Email, Telefone, Senha e Confirmar Senha)
+  // Submit Register
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     resetFormState();
@@ -71,8 +77,8 @@ export const Login: React.FC = () => {
       return;
     }
 
-    if (regPassword.length < 6) {
-      setError('A senha deve conter no mínimo 6 caracteres.');
+    if (regPassword.length < 8) {
+      setError('A senha deve conter no mínimo 8 caracteres alfanuméricos.');
       return;
     }
 
@@ -171,13 +177,21 @@ export const Login: React.FC = () => {
                 <div className="relative">
                   <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input 
-                    type="password" 
+                    type={showPassword ? 'text' : 'password'} 
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-600 font-medium"
+                    className="w-full pl-10 pr-11 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-600 font-medium"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                    title={showPassword ? 'Ocultar senha' : 'Exibir senha'}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
 
@@ -263,26 +277,37 @@ export const Login: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Senha *</label>
-                  <input 
-                    type="password" 
-                    required
-                    value={regPassword}
-                    onChange={(e) => setRegPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-emerald-600 font-medium"
-                  />
+              <div className="space-y-3">
+                <div className="relative">
+                  <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Senha (mínimo 8 caracteres) *</label>
+                  <div className="relative">
+                    <input 
+                      type={showRegPassword ? 'text' : 'password'} 
+                      required
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      placeholder="Mínimo 8 digitos"
+                      className="w-full px-3 py-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-emerald-600 font-medium"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowRegPassword(!showRegPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                      title={showRegPassword ? 'Ocultar' : 'Exibir'}
+                    >
+                      {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
+
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Repetir Senha *</label>
                   <input 
-                    type="password" 
+                    type={showRegPassword ? 'text' : 'password'} 
                     required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="Repita a senha"
                     className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-emerald-600 font-medium"
                   />
                 </div>
@@ -335,7 +360,7 @@ export const Login: React.FC = () => {
                     value={recoverEmail}
                     onChange={(e) => setRecoverEmail(e.target.value)}
                     placeholder="seu.email@exemplo.com"
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-emerald-600 font-medium"
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-600 font-medium"
                   />
                 </div>
               </div>
