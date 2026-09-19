@@ -453,6 +453,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setContracts(prev => [newContract, ...prev]);
     setInstallments(prev => [...newInstallments, ...prev]);
+
+    try {
+      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+      const token = session?.accessToken;
+      const userId = session?.user?.id;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const contractObj: any = {
+        contract_number: cntData.contractNumber,
+        customer_id: cntData.customerId,
+        customer_name: cntData.customerName,
+        start_date: cntData.startDate,
+        amount: cntData.amount,
+        interest_rate: cntData.interestRate,
+        period_days: cntData.periodDays,
+        total_installments: cntData.totalInstallments,
+        installment_amount: cntData.installmentAmount,
+        total_to_receive: cntData.totalToReceive,
+        daily_late_fee: cntData.dailyLateFee || 0,
+        notes: cntData.notes,
+        status: 'Ativo'
+      };
+
+      if (userId) {
+        contractObj.user_id = userId;
+      }
+
+      const mutation = `
+        mutation InsertContract($object: contracts_insert_input!) {
+          insert_contracts_one(object: $object) {
+            id
+          }
+        }
+      `;
+      await nhost.graphql.request(
+        { query: mutation, variables: { object: contractObj } },
+        { headers }
+      );
+    } catch (e) {
+      console.log('Erro ao salvar contrato no Nhost GraphQL:', e);
+    }
   };
 
   const updateContract = async (updated: Contract) => {
