@@ -14,6 +14,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   login: (u: string, p: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (data: SignUpData) => Promise<{ success: boolean; message?: string; error?: string }>;
+  loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
   user: { name: string; email: string } | null;
@@ -300,6 +301,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const loginWithGoogle = async (): Promise<void> => {
+    try {
+      const res = await (nhost.auth as any).signInOAuth({ provider: 'google' });
+      if ((res as any)?.providerUrl) {
+        window.location.href = (res as any).providerUrl;
+      }
+    } catch (e) {
+      console.error('Erro ao conectar com Google OAuth:', e);
+    }
+  };
+
   // Password Recovery via Nhost Auth
   const resetPassword = async (email: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     try {
@@ -532,6 +544,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isAuthenticated,
       login,
       signUp,
+      loginWithGoogle,
       resetPassword,
       logout,
       user,
