@@ -213,21 +213,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
-      if ((res as any)?.error || (res as any)?.body?.error) {
-        const errObj = (res as any)?.error || (res as any)?.body?.error;
-        let errMsg = errObj.message || 'Erro ao realizar cadastro no Nhost.';
-        
-        if (errMsg.toLowerCase().includes('password is too short') || errObj.error === 'password-too-short') {
-          errMsg = 'A senha é muito curta. Informe no mínimo 8 caracteres (letras e números).';
-        } else if (errMsg.toLowerCase().includes('user already exists') || errObj.error === 'user-already-exists') {
-          errMsg = 'Este e-mail já está cadastrado no sistema.';
-        } else if (errMsg.toLowerCase().includes('invalid email') || errObj.error === 'invalid-email-password') {
-          errMsg = 'Por favor informe um e-mail válido.';
+      if ((res as any)?.error || (res as any)?.body?.error || (res as any)?.status >= 400) {
+        const errObj = (res as any)?.error || (res as any)?.body?.error || {};
+        let rawMessage = errObj.message || (typeof res === 'string' ? res : JSON.stringify(res));
+
+        if (rawMessage.toLowerCase().includes('password is too short') || errObj.error === 'password-too-short') {
+          return { 
+            success: false, 
+            error: 'A senha é muito curta. Informe no mínimo 8 caracteres (letras e números).' 
+          };
+        } else if (rawMessage.toLowerCase().includes('user already exists') || errObj.error === 'user-already-exists') {
+          return { 
+            success: false, 
+            error: 'Este e-mail já está cadastrado no sistema.' 
+          };
+        } else if (rawMessage.toLowerCase().includes('invalid email') || errObj.error === 'invalid-email-password') {
+          return { 
+            success: false, 
+            error: 'Por favor informe um e-mail válido.' 
+          };
         }
         
         return { 
           success: false, 
-          error: errMsg 
+          error: errObj.message || 'Erro ao realizar cadastro no Nhost.' 
         };
       }
 
