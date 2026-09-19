@@ -168,33 +168,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await nhost.auth.signInEmailPassword({ email, password: pass });
-      if (res && (res as any).body?.session?.user) {
+      
+      // Check for error in response
+      if ((res as any)?.error || (res as any)?.body?.error) {
+        const errObj = (res as any)?.error || (res as any)?.body?.error;
+        return { 
+          success: false, 
+          error: errObj.message || 'E-mail ou senha incorretos. Verifique suas credenciais.' 
+        };
+      }
+
+      const session = (res as any)?.body?.session || (res as any)?.session;
+      if (session?.user) {
         const userObj = {
-          name: (res as any).body.session.user.displayName || email.split('@')[0],
-          email: (res as any).body.session.user.email || email
+          name: session.user.displayName || email.split('@')[0],
+          email: session.user.email || email
         };
         setUser(userObj);
         localStorage.setItem('credmais_user', JSON.stringify(userObj));
         setIsAuthenticated(true);
         localStorage.setItem('credmais_auth', 'true');
+        await fetchRemoteData();
         return { success: true };
-      } else if (res && (res as any).error) {
-        return { success: false, error: (res as any).error.message || 'Credenciais inválidas' };
       }
     } catch (e: any) {
-      console.log('Falha na autenticação remota Nhost, tentando login de fallback');
+      return { success: false, error: e?.message || 'Falha ao conectar ao servidor Nhost.' };
     }
 
-    // Fallback demo user
-    if (email && pass) {
-      const userObj = { name: email.split('@')[0] || 'Usuário CredMais', email };
-      setUser(userObj);
-      localStorage.setItem('credmais_user', JSON.stringify(userObj));
-      setIsAuthenticated(true);
-      localStorage.setItem('credmais_auth', 'true');
-      return { success: true };
-    }
-    return { success: false, error: 'Por favor preencha email e senha' };
+    return { success: false, error: 'Credenciais inválidas. Verifique seu e-mail e senha.' };
   };
 
   // Sign Up via Nhost Auth
@@ -212,27 +213,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
-      if (res && (res as any).body?.session?.user) {
+      if ((res as any)?.error || (res as any)?.body?.error) {
+        const errObj = (res as any)?.error || (res as any)?.body?.error;
+        return { 
+          success: false, 
+          error: errObj.message || 'Erro ao realizar cadastro no Nhost.' 
+        };
+      }
+
+      const session = (res as any)?.body?.session || (res as any)?.session;
+      if (session?.user) {
         const userObj = { name: fullName, email: data.email };
         setUser(userObj);
         localStorage.setItem('credmais_user', JSON.stringify(userObj));
         setIsAuthenticated(true);
         localStorage.setItem('credmais_auth', 'true');
+        await fetchRemoteData();
         return { success: true };
-      } else if (res && (res as any).error) {
-        return { success: false, error: (res as any).error.message || 'Erro ao realizar cadastro.' };
+      } else {
+        return { 
+          success: true, 
+          error: 'Cadastro realizado com sucesso! Verifique seu e-mail para confirmar a conta antes de entrar.' 
+        };
       }
     } catch (e: any) {
-      console.log('Nhost Sign Up offline fallback');
+      return { success: false, error: e?.message || 'Erro ao conectar ao servidor de cadastro.' };
     }
-
-    // Local fallback signup
-    const userObj = { name: fullName, email: data.email };
-    setUser(userObj);
-    localStorage.setItem('credmais_user', JSON.stringify(userObj));
-    setIsAuthenticated(true);
-    localStorage.setItem('credmais_auth', 'true');
-    return { success: true };
   };
 
   // Password Recovery via Nhost Auth
