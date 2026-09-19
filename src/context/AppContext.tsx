@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Customer, Contract, Installment } from '../types';
-import { initialCustomers, initialContracts, initialInstallments } from '../data/initialData';
 import { nhost } from '../lib/nhost';
 
 interface SignUpData {
@@ -59,17 +58,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     const saved = localStorage.getItem('credmais_customers');
-    return saved ? JSON.parse(saved) : initialCustomers;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [contracts, setContracts] = useState<Contract[]>(() => {
     const saved = localStorage.getItem('credmais_contracts');
-    return saved ? JSON.parse(saved) : initialContracts;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [installments, setInstallments] = useState<Installment[]>(() => {
     const saved = localStorage.getItem('credmais_installments');
-    return saved ? JSON.parse(saved) : initialInstallments;
+    return saved ? JSON.parse(saved) : [];
   });
 
   useEffect(() => {
