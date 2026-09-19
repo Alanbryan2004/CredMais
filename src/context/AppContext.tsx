@@ -407,19 +407,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('credmais_installments');
   };
 
-  const getCurrentUserId = (): string | null => {
+  const getOrFetchUserId = async (): Promise<string | null> => {
     try {
-      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-      if (session?.user?.id) return session.user.id;
-      const u = (nhost.auth as any)?.getUser?.();
-      if (u?.id) return u.id;
-      if (user?.id) return user.id;
-      const savedUser = localStorage.getItem('credmais_user');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        if (parsed?.id) return parsed.id;
+      const userRes = await nhost.auth.getUser();
+      const u = (userRes as any)?.user || (userRes as any)?.body?.user || (userRes as any)?.data?.user || userRes;
+      if (u?.id && typeof u.id === 'string') {
+        if (!user?.id) {
+          const updatedUser = { 
+            id: u.id, 
+            name: u.displayName || user?.name || 'Usuário', 
+            email: u.email || user?.email || '' 
+          };
+          setUser(updatedUser);
+          localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
+        }
+        return u.id;
       }
     } catch (e) {}
+
+    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+    if (session?.user?.id) return session.user.id;
+    if (user?.id) return user.id;
+
+    const savedUser = localStorage.getItem('credmais_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.id) return parsed.id;
+      } catch (e) {}
+    }
+
     return null;
   };
 
@@ -433,6 +450,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomers(prev => [newCust, ...prev]);
 
     try {
+      const userId = await getOrFetchUserId();
       const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
       const token = session?.accessToken;
       const headers: Record<string, string> = {};
@@ -440,7 +458,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const userId = getCurrentUserId();
       const insertObj: any = {
         name: cData.name,
         email: cData.email,
@@ -463,13 +480,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         mutation InsertCustomer($object: customers_insert_input!) {
           insert_customers_one(object: $object) {
             id
+            user_id
           }
         }
       `;
-      await nhost.graphql.request(
+      const res = await nhost.graphql.request(
         { query: mutation, variables: { object: insertObj } },
         { headers }
       );
+      console.log('Resultado Nhost Insert Customer:', res);
     } catch (e) {
       console.log('Erro ao salvar cliente no Nhost GraphQL:', e);
     }
@@ -520,7 +539,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
       const token = session?.accessToken;
-      const userId = getCurrentUserId();
+      const userId = await getOrFetchUserId();
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
