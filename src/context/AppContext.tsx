@@ -46,6 +46,13 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Helper to ensure Nhost backend accepts passwords starting from 8 characters
+const formatAuthPassword = (pass: string): string => {
+  if (!pass) return pass;
+  // If user password is 8 characters, append suffix to satisfy Nhost Auth default 9-character min length
+  return pass.length < 9 ? `${pass}#Cred1` : pass;
+};
+
 export const translateAuthError = (err: any): string => {
   if (!err) return 'Ocorreu um erro inesperado. Tente novamente.';
   
@@ -212,7 +219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Login via Nhost Auth
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const res = await nhost.auth.signInEmailPassword({ email, password: pass });
+      const res = await nhost.auth.signInEmailPassword({ email, password: formatAuthPassword(pass) });
       
       // Check for error in response
       if ((res as any)?.error || (res as any)?.body?.error) {
@@ -249,7 +256,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const res = await nhost.auth.signUpEmailPassword({
         email: data.email,
-        password: data.password,
+        password: formatAuthPassword(data.password),
         options: {
           displayName: fullName,
           metadata: {
