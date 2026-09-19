@@ -1,6 +1,6 @@
 -- =========================================================
--- CREDMAIS - SCRIPT DE CRIAÇÃO DE BANCO DE DADOS NHOST
--- Execute este script no SQL Editor do Nhost (Database -> SQL Editor)
+-- CREDMAIS - SCRIPT DE CRIAÇÃO DE BANCO DE DADOS NHOST (CORRIGIDO)
+-- Execute este script no Hasura Raw SQL (Marque a opção "Track this")
 -- =========================================================
 
 -- Habilitar extensão pgcrypto para UUIDs
@@ -57,6 +57,3 @@ CREATE TABLE IF NOT EXISTS public.installments (
     status TEXT NOT NULL DEFAULT 'A vencer',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Habilitar permissões públicas para desenvolvimento no Hasura / Nhost
-GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, anon, authenticated;
