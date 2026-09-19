@@ -171,10 +171,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = (res as any).body.data;
         if (remoteCust && Array.isArray(remoteCust)) {
           const filteredCust = currentUserId 
-            ? remoteCust.filter((c: any) => c.user_id === currentUserId)
+            ? remoteCust.filter((c: any) => !c.user_id || c.user_id === currentUserId)
             : remoteCust;
 
-          setCustomers(filteredCust.map((c: any) => ({
+          const remoteMapped = filteredCust.map((c: any) => ({
             id: c.id,
             name: c.name,
             email: c.email || '',
@@ -188,15 +188,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             complement: c.complement || '',
             notes: c.notes || '',
             createdAt: c.created_at
-          })));
+          }));
+
+          setCustomers(prev => {
+            if (remoteMapped.length === 0) return prev;
+            const remoteIds = new Set(remoteMapped.map(c => c.id));
+            const localUnsynced = prev.filter(c => !remoteIds.has(c.id));
+            return [...remoteMapped, ...localUnsynced];
+          });
         }
 
         if (remoteCnt && Array.isArray(remoteCnt)) {
           const filteredCnt = currentUserId 
-            ? remoteCnt.filter((c: any) => c.user_id === currentUserId)
+            ? remoteCnt.filter((c: any) => !c.user_id || c.user_id === currentUserId)
             : remoteCnt;
 
-          setContracts(filteredCnt.map((c: any) => ({
+          const remoteMappedCnt = filteredCnt.map((c: any) => ({
             id: c.id,
             contractNumber: c.contract_number,
             customerId: c.customer_id,
@@ -212,15 +219,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             notes: c.notes || '',
             status: c.status,
             createdAt: c.created_at
-          })));
+          }));
+
+          setContracts(prev => {
+            if (remoteMappedCnt.length === 0) return prev;
+            const remoteIds = new Set(remoteMappedCnt.map(c => c.id));
+            const localUnsynced = prev.filter(c => !remoteIds.has(c.id));
+            return [...remoteMappedCnt, ...localUnsynced];
+          });
         }
 
         if (remoteInst && Array.isArray(remoteInst)) {
           const filteredInst = currentUserId 
-            ? remoteInst.filter((i: any) => i.user_id === currentUserId)
+            ? remoteInst.filter((i: any) => !i.user_id || i.user_id === currentUserId)
             : remoteInst;
 
-          setInstallments(filteredInst.map((i: any) => ({
+          const remoteMappedInst = filteredInst.map((i: any) => ({
             id: i.id,
             contractId: i.contract_id,
             installmentNumber: i.installment_number,
@@ -231,7 +245,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             paidAmount: Number(i.paid_amount || 0),
             paidDate: i.paid_date || undefined,
             status: i.status
-          })));
+          }));
+
+          setInstallments(prev => {
+            if (remoteMappedInst.length === 0) return prev;
+            const remoteIds = new Set(remoteMappedInst.map(i => i.id));
+            const localUnsynced = prev.filter(i => !remoteIds.has(i.id));
+            return [...remoteMappedInst, ...localUnsynced];
+          });
         }
       }
     } catch (err) {
