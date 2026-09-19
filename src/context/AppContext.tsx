@@ -19,6 +19,9 @@ interface AppContextType {
   logout: () => void;
   user: { name: string; email: string } | null;
   
+  isSyncing: boolean;
+  refreshData: () => Promise<void>;
+  
   customers: Customer[];
   addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
   updateCustomer: (c: Customer) => Promise<void>;
@@ -136,8 +139,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('credmais_installments', JSON.stringify(installments));
   }, [installments]);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Nhost GraphQL helper for fetching data
   const fetchRemoteData = async () => {
+    setIsSyncing(true);
     try {
       const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
       const token = session?.accessToken;
@@ -230,12 +236,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err) {
       console.log('Utilizando modo local / offline Nhost', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
+  const refreshData = async () => {
+    await fetchRemoteData();
+  };
+
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     fetchRemoteData();
-  }, []);
+
+    // Auto sync background polling every 8 seconds
+    const interval = setInterval(() => {
+      fetchRemoteData();
+    }, 8000);
+
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   // Login via Nhost Auth
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
@@ -605,6 +626,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resetPassword,
       logout,
       user,
+      isSyncing,
+      refreshData,
       customers,
       addCustomer,
       updateCustomer,

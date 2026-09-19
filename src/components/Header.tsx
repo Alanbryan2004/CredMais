@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Bell } from 'lucide-react';
+import { Menu, Bell, RefreshCw } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 interface HeaderProps {
@@ -8,7 +8,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSidebar, activeTab }) => {
-  const { installments } = useApp();
+  const { installments, isSyncing, refreshData } = useApp();
 
   const overdueCount = installments.filter(i => i.status === 'Atrasado').length;
   const todayCount = installments.filter(i => i.status === 'Vencendo Hoje').length;
@@ -27,7 +27,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSidebar, activeTab }) => {
       <div className="flex items-center gap-3">
         <button 
           onClick={onOpenSidebar}
-          className="p-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors focus:outline-hidden"
+          className="p-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors focus:outline-hidden cursor-pointer"
           aria-label="Menu"
         >
           <Menu className="w-6 h-6" />
@@ -38,6 +38,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSidebar, activeTab }) => {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Sync Indicator / Refresh Button */}
+        <button
+          onClick={() => refreshData()}
+          disabled={isSyncing}
+          className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-xs font-semibold"
+          title="Sincronizar Dados em Tempo Real"
+        >
+          <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
+          <span className="hidden md:inline text-xs text-gray-600">{isSyncing ? 'Sincronizando...' : 'Atualizado'}</span>
+        </button>
+
         {(overdueCount > 0 || todayCount > 0) && (
           <div className="relative">
             <span className="flex h-3 w-3 absolute -top-0.5 -right-0.5">
