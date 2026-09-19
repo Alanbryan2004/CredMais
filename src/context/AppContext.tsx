@@ -167,8 +167,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       `;
       const res = await nhost.graphql.request({ query }, { headers });
-      if (res && (res as any).body?.data) {
-        const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = (res as any).body.data;
+      const data = (res as any)?.data || (res as any)?.body?.data;
+      if (data) {
+        const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = data;
         if (remoteCust && Array.isArray(remoteCust)) {
           const filteredCust = currentUserId 
             ? remoteCust.filter((c: any) => !c.user_id || c.user_id === currentUserId)
@@ -499,20 +500,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       `;
       
-      try {
-        const res = await nhost.graphql.request(
-          { query: mutation, variables: { object: insertObj } },
-          { headers }
-        );
-        console.log('Resultado Nhost Insert Customer:', res);
-      } catch (err) {
-        // Fallback: If Hasura has a Column Preset on user_id, retry without user_id in payload
+      const res: any = await nhost.graphql.request(
+        { query: mutation, variables: { object: insertObj } },
+        { headers }
+      );
+      const hasError = res?.error || res?.errors || res?.body?.errors;
+      if (hasError) {
+        console.log('Nhost Insert Customer error, tentando fallback sem user_id...', hasError);
         delete insertObj.user_id;
-        const res = await nhost.graphql.request(
+        const resFallback: any = await nhost.graphql.request(
           { query: mutation, variables: { object: insertObj } },
           { headers }
         );
-        console.log('Resultado Nhost Insert Customer (Preset Fallback):', res);
+        console.log('Resultado Nhost Insert Customer Fallback:', resFallback);
+      } else {
+        console.log('Sucesso Nhost Insert Customer:', res);
       }
     } catch (e) {
       console.log('Erro ao salvar cliente no Nhost GraphQL:', e);
