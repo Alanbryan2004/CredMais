@@ -138,6 +138,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Nhost GraphQL helper for fetching data
   const fetchRemoteData = async () => {
     try {
+      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+      const token = session?.accessToken;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const query = `
         query GetCredMaisData {
           customers {
@@ -151,10 +158,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       `;
-      const res = await nhost.graphql.request({ query });
+      const res = await nhost.graphql.request({ query }, { headers });
       if (res && (res as any).body?.data) {
         const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = (res as any).body.data;
-        if (remoteCust && remoteCust.length > 0) {
+        if (remoteCust && Array.isArray(remoteCust)) {
           setCustomers(remoteCust.map((c: any) => ({
             id: c.id,
             name: c.name,
@@ -172,7 +179,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           })));
         }
 
-        if (remoteCnt && remoteCnt.length > 0) {
+        if (remoteCnt && Array.isArray(remoteCnt)) {
           setContracts(remoteCnt.map((c: any) => ({
             id: c.id,
             contractNumber: c.contract_number,
@@ -192,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           })));
         }
 
-        if (remoteInst && remoteInst.length > 0) {
+        if (remoteInst && Array.isArray(remoteInst)) {
           setInstallments(remoteInst.map((i: any) => ({
             id: i.id,
             contractId: i.contract_id,
@@ -208,7 +215,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     } catch (err) {
-      console.log('Utilizando modo local / offline Nhost');
+      console.log('Utilizando modo local / offline Nhost', err);
     }
   };
 
@@ -338,6 +345,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomers(prev => [newCust, ...prev]);
 
     try {
+      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+      const token = session?.accessToken;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const userId = session?.user?.id;
+      const insertObj: any = {
+        name: cData.name,
+        email: cData.email,
+        phone: cData.phone,
+        birth_date: cData.birthDate || null,
+        cpf: cData.cpf,
+        rg: cData.rg,
+        cep: cData.cep,
+        address: cData.address,
+        number: cData.number,
+        complement: cData.complement,
+        notes: cData.notes
+      };
+
+      if (userId) {
+        insertObj.user_id = userId;
+      }
+
       const mutation = `
         mutation InsertCustomer($object: customers_insert_input!) {
           insert_customers_one(object: $object) {
@@ -345,25 +378,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       `;
-      await nhost.graphql.request({
-        query: mutation,
-        variables: {
-          object: {
-            name: cData.name,
-            email: cData.email,
-            phone: cData.phone,
-            birth_date: cData.birthDate || null,
-            cpf: cData.cpf,
-            rg: cData.rg,
-            cep: cData.cep,
-            address: cData.address,
-            number: cData.number,
-            complement: cData.complement,
-            notes: cData.notes
-          }
-        }
-      });
-    } catch (e) {}
+      await nhost.graphql.request(
+        { query: mutation, variables: { object: insertObj } },
+        { headers }
+      );
+    } catch (e) {
+      console.log('Erro ao salvar cliente no Nhost GraphQL:', e);
+    }
 
     return newCust;
   };
