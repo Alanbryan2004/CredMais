@@ -141,6 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
       const token = session?.accessToken;
+      const currentUserId = session?.user?.id;
       const headers: Record<string, string> = {};
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
@@ -149,13 +150,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const query = `
         query GetCredMaisData {
           customers {
-            id name email phone birth_date cpf rg cep address number complement notes created_at
+            id user_id name email phone birth_date cpf rg cep address number complement notes created_at
           }
           contracts {
-            id contract_number customer_id customer_name start_date amount interest_rate period_days total_installments installment_amount total_to_receive daily_late_fee notes status created_at
+            id user_id contract_number customer_id customer_name start_date amount interest_rate period_days total_installments installment_amount total_to_receive daily_late_fee notes status created_at
           }
           installments {
-            id contract_id installment_number total_installments due_date original_amount daily_late_fee paid_amount paid_date status created_at
+            id user_id contract_id installment_number total_installments due_date original_amount daily_late_fee paid_amount paid_date status created_at
           }
         }
       `;
@@ -163,7 +164,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (res && (res as any).body?.data) {
         const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = (res as any).body.data;
         if (remoteCust && Array.isArray(remoteCust)) {
-          setCustomers(remoteCust.map((c: any) => ({
+          const filteredCust = currentUserId 
+            ? remoteCust.filter((c: any) => c.user_id === currentUserId)
+            : remoteCust;
+
+          setCustomers(filteredCust.map((c: any) => ({
             id: c.id,
             name: c.name,
             email: c.email || '',
@@ -181,7 +186,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (remoteCnt && Array.isArray(remoteCnt)) {
-          setContracts(remoteCnt.map((c: any) => ({
+          const filteredCnt = currentUserId 
+            ? remoteCnt.filter((c: any) => c.user_id === currentUserId)
+            : remoteCnt;
+
+          setContracts(filteredCnt.map((c: any) => ({
             id: c.id,
             contractNumber: c.contract_number,
             customerId: c.customer_id,
@@ -201,7 +210,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (remoteInst && Array.isArray(remoteInst)) {
-          setInstallments(remoteInst.map((i: any) => ({
+          const filteredInst = currentUserId 
+            ? remoteInst.filter((i: any) => i.user_id === currentUserId)
+            : remoteInst;
+
+          setInstallments(filteredInst.map((i: any) => ({
             id: i.id,
             contractId: i.contract_id,
             installmentNumber: i.installment_number,
