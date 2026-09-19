@@ -77,11 +77,6 @@ export const Login: React.FC = () => {
       return;
     }
 
-    if (regPassword.length < 8) {
-      setError('A senha deve conter no mínimo 8 caracteres alfanuméricos.');
-      return;
-    }
-
     setLoading(true);
     const res = await signUp({
       firstName,
@@ -284,14 +279,14 @@ export const Login: React.FC = () => {
 
               <div className="space-y-3">
                 <div className="relative">
-                  <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Senha (mínimo 8 caracteres) *</label>
+                  <label className="block text-xs font-bold text-gray-700 mb-1 uppercase tracking-wider">Senha *</label>
                   <div className="relative">
                     <input 
                       type={showRegPassword ? 'text' : 'password'} 
                       required
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Mínimo 8 digitos"
+                      placeholder="Digite sua senha"
                       className="w-full px-3 py-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:ring-2 focus:ring-emerald-600 font-medium"
                     />
                     <button
