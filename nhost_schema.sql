@@ -9,6 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- 1. TABELA DE CLIENTES (customers)
 CREATE TABLE IF NOT EXISTS public.customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
     name TEXT NOT NULL,
     email TEXT,
     phone TEXT NOT NULL,
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
 -- 2. TABELA DE CONTRATOS (contracts)
 CREATE TABLE IF NOT EXISTS public.contracts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
     contract_number TEXT NOT NULL,
     customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
     customer_name TEXT NOT NULL,
@@ -46,6 +48,7 @@ CREATE TABLE IF NOT EXISTS public.contracts (
 -- 3. TABELA DE PARCELAS (installments)
 CREATE TABLE IF NOT EXISTS public.installments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID,
     contract_id UUID NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
     installment_number INTEGER NOT NULL,
     total_installments INTEGER NOT NULL,

@@ -259,7 +259,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await nhost.auth.signOut({});
     } catch (e) {}
     setIsAuthenticated(false);
+    setUser(null);
+    setCustomers([]);
+    setContracts([]);
+    setInstallments([]);
     localStorage.removeItem('credmais_auth');
+    localStorage.removeItem('credmais_user');
+    localStorage.removeItem('credmais_customers');
+    localStorage.removeItem('credmais_contracts');
+    localStorage.removeItem('credmais_installments');
   };
 
   const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>) => {
