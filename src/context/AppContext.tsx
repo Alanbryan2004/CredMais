@@ -498,11 +498,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       `;
-      const res = await nhost.graphql.request(
-        { query: mutation, variables: { object: insertObj } },
-        { headers }
-      );
-      console.log('Resultado Nhost Insert Customer:', res);
+      
+      try {
+        const res = await nhost.graphql.request(
+          { query: mutation, variables: { object: insertObj } },
+          { headers }
+        );
+        console.log('Resultado Nhost Insert Customer:', res);
+      } catch (err) {
+        // Fallback: If Hasura has a Column Preset on user_id, retry without user_id in payload
+        delete insertObj.user_id;
+        const res = await nhost.graphql.request(
+          { query: mutation, variables: { object: insertObj } },
+          { headers }
+        );
+        console.log('Resultado Nhost Insert Customer (Preset Fallback):', res);
+      }
     } catch (e) {
       console.log('Erro ao salvar cliente no Nhost GraphQL:', e);
     }
@@ -586,10 +597,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       `;
-      await nhost.graphql.request(
-        { query: mutation, variables: { object: contractObj } },
-        { headers }
-      );
+      try {
+        await nhost.graphql.request(
+          { query: mutation, variables: { object: contractObj } },
+          { headers }
+        );
+      } catch (err) {
+        delete contractObj.user_id;
+        await nhost.graphql.request(
+          { query: mutation, variables: { object: contractObj } },
+          { headers }
+        );
+      }
     } catch (e) {
       console.log('Erro ao salvar contrato no Nhost GraphQL:', e);
     }
