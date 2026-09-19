@@ -13,7 +13,7 @@ interface SignUpData {
 interface AppContextType {
   isAuthenticated: boolean;
   login: (u: string, p: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (data: SignUpData) => Promise<{ success: boolean; error?: string }>;
+  signUp: (data: SignUpData) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
   user: { name: string; email: string } | null;
@@ -251,7 +251,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Sign Up via Nhost Auth
-  const signUp = async (data: SignUpData): Promise<{ success: boolean; error?: string }> => {
+  const signUp = async (data: SignUpData): Promise<{ success: boolean; message?: string; error?: string }> => {
     const fullName = `${data.firstName} ${data.lastName}`.trim();
     try {
       const res = await nhost.auth.signUpEmailPassword({
@@ -285,7 +285,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         return { 
           success: true, 
-          error: 'Cadastro realizado com sucesso! Verifique seu e-mail para confirmar a conta antes de entrar.' 
+          message: 'Cadastro realizado com sucesso! Se você ativou verificação de e-mail no Nhost, confira sua caixa de entrada antes de logar.' 
         };
       }
     } catch (e: any) {

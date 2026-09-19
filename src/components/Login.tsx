@@ -94,6 +94,11 @@ export const Login: React.FC = () => {
 
     if (!res.success) {
       setError(translateAuthError(res.error || 'Ocorreu um erro ao criar a conta.'));
+    } else {
+      setSuccessMsg(res.message || 'Cadastro realizado com sucesso! Insira suas credenciais para acessar.');
+      setEmail(regEmail);
+      setPassword(regPassword);
+      setMode('LOGIN');
     }
   };
 
