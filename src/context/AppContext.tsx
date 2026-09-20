@@ -112,10 +112,32 @@ export const translateAuthError = (err: any): string => {
   return msg;
 };
 
+const getNhostAccessToken = (): string | null => {
+  try {
+    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+    return session?.accessToken || (nhost.auth as any)?.accessToken || null;
+  } catch (e) {
+    return null;
+  }
+};
+
+const getNhostUser = (): any => {
+  try {
+    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
+    if (session?.user) return session.user;
+    if (typeof (nhost.auth as any)?.getUser === 'function') {
+      return (nhost.auth as any).getUser();
+    }
+    return (nhost.auth as any)?.user || null;
+  } catch (e) {
+    return null;
+  }
+};
+
 // Helper for executing GraphQL requests with Nhost token safely
 const executeGql = async (query: string, variables?: any) => {
   try {
-    const token = nhost.auth.getAccessToken();
+    const token = getNhostAccessToken();
     const reqPayload = variables ? { query, variables } : { query };
     if (token) {
       return await nhost.graphql.request(reqPayload, {
@@ -173,7 +195,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return user.id;
     }
 
-    const nhostUser = nhost.auth.getUser();
+    const nhostUser = getNhostUser();
     if (nhostUser?.id) return nhostUser.id;
 
     const savedUser = localStorage.getItem('credmais_user');
@@ -453,7 +475,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     const userId = await getOrFetchUserId();
-    const token = nhost.auth.getAccessToken();
+    const token = getNhostAccessToken();
 
     const insertObj: any = {
       id: customerId,
