@@ -164,18 +164,32 @@ const getNhostUser = (): any => {
 
 // Helper for executing GraphQL requests with Nhost token safely
 const executeGql = async (query: string, variables?: any) => {
+  const reqPayload = variables ? { query, variables } : { query };
   try {
     const token = getNhostAccessToken();
-    const reqPayload = variables ? { query, variables } : { query };
     if (token) {
-      return await nhost.graphql.request(reqPayload, {
+      const res: any = await nhost.graphql.request(reqPayload, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      const errors = res?.error || res?.errors || res?.body?.errors;
+      const isJwtExpired = JSON.stringify(errors || '').includes('JWTExpired');
+      if (isJwtExpired) {
+        console.warn('JWT expirado detectado, renovando sessão no Nhost...');
+        try {
+          await nhost.auth.refreshSession();
+        } catch (e) {}
+        return await nhost.graphql.request(reqPayload);
+      }
+      return res;
     }
     return await nhost.graphql.request(reqPayload);
   } catch (err) {
-    console.error('Nhost GraphQL execution error:', err);
-    return { error: err };
+    try {
+      return await nhost.graphql.request(reqPayload);
+    } catch (e2) {
+      console.error('Nhost GraphQL execution error:', err);
+      return { error: err };
+    }
   }
 };
 
