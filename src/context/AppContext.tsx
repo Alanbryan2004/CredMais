@@ -114,11 +114,39 @@ export const translateAuthError = (err: any): string => {
 
 const getNhostAccessToken = (): string | null => {
   try {
-    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-    return session?.accessToken || (nhost.auth as any)?.accessToken || null;
-  } catch (e) {
-    return null;
-  }
+    const auth: any = nhost.auth;
+    if (!auth) return null;
+    
+    if (typeof auth.getSession === 'function') {
+      const sess = auth.getSession();
+      if (sess?.accessToken) return sess.accessToken;
+    }
+    
+    if (auth.session?.accessToken) return auth.session.accessToken;
+    if (auth.session?.jwtToken) return auth.session.jwtToken;
+    
+    if (typeof auth.accessToken === 'string') return auth.accessToken;
+    if (typeof auth.getAccessToken === 'function') {
+      const token = auth.getAccessToken();
+      if (token) return token;
+    }
+
+    // Fallback: Check localStorage for Nhost session
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.toLowerCase().includes('nhost') || key.toLowerCase().includes('auth'))) {
+        try {
+          const val = localStorage.getItem(key);
+          if (val && val.includes('accessToken')) {
+            const parsed = JSON.parse(val);
+            if (parsed?.accessToken) return parsed.accessToken;
+            if (parsed?.session?.accessToken) return parsed.session.accessToken;
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+  return null;
 };
 
 const getNhostUser = (): any => {

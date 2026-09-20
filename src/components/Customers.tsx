@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Search, Phone, MapPin, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Search, Phone, MapPin, Edit, Trash2, X, Copy, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import type { Customer } from '../types';
 
@@ -8,6 +8,19 @@ export const Customers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  const [diagModal, setDiagModal] = useState<{
+    isOpen: boolean;
+    success: boolean;
+    title: string;
+    error?: string;
+    payloadSent?: any;
+    copied?: boolean;
+  }>({
+    isOpen: false,
+    success: false,
+    title: ''
+  });
 
   const [formData, setFormData] = useState({
     name: '',
@@ -62,7 +75,12 @@ export const Customers: React.FC = () => {
     if (e) e.preventDefault();
     try {
       if (!formData.name || !formData.phone) {
-        alert('Por favor informe pelo menos o Nome e Telefone do Cliente.');
+        setDiagModal({
+          isOpen: true,
+          success: false,
+          title: 'Formulário Incompleto',
+          error: 'Por favor informe pelo menos o Nome e Telefone do cliente.'
+        });
         return;
       }
 
@@ -75,17 +93,40 @@ export const Customers: React.FC = () => {
       } else {
         const result = await addCustomer(formData);
         if (result && result.success) {
-          alert(`✅ CLIENTE SALVO NO BANCO COM SUCESSO!\n\nID do Cliente: ${result.customer?.id}\nUser ID Identificado: ${result.payloadSent?.activeUserId}\nToken Nhost Presente: ${result.payloadSent?.tokenPresent ? 'SIM' : 'NÃO'}`);
           setIsModalOpen(false);
+          setDiagModal({
+            isOpen: true,
+            success: true,
+            title: '✅ CLIENTE SALVO NO BANCO COM SUCESSO!',
+            payloadSent: result.payloadSent
+          });
         } else {
-          const errorText = result?.error || 'Erro desconhecido ao comunicar com Nhost GraphQL';
-          const payloadText = result?.payloadSent ? JSON.stringify(result.payloadSent, null, 2) : 'Payload não gerado';
-          alert(`❌ FALHA AO SALVAR NO BANCO NHOST!\n\nMOTIVO / ERRO DO BANCO:\n${errorText}\n\nDADOS ENVIADOS:\n${payloadText}`);
+          setDiagModal({
+            isOpen: true,
+            success: false,
+            title: '❌ FALHA AO SALVAR NO BANCO NHOST',
+            error: result?.error || 'Erro desconhecido ao comunicar com Nhost GraphQL',
+            payloadSent: result?.payloadSent
+          });
         }
       }
     } catch (err: any) {
-      alert(`❌ ERRO NO APLICATIVO ao tentar salvar:\n${err?.message || JSON.stringify(err)}`);
+      setDiagModal({
+        isOpen: true,
+        success: false,
+        title: '❌ EXCEÇÃO NO APLICATIVO',
+        error: err?.message || JSON.stringify(err)
+      });
     }
+  };
+
+  const handleCopyDiag = () => {
+    const fullText = `TITULO: ${diagModal.title}\n\nERRO DO BANCO:\n${diagModal.error || 'Nenhum erro'}\n\nDADOS ENVIADOS:\n${JSON.stringify(diagModal.payloadSent, null, 2)}`;
+    navigator.clipboard.writeText(fullText);
+    setDiagModal(prev => ({ ...prev, copied: true }));
+    setTimeout(() => {
+      setDiagModal(prev => ({ ...prev, copied: false }));
+    }, 2000);
   };
 
   const filteredCustomers = customers.filter(c => 
@@ -111,58 +152,56 @@ export const Customers: React.FC = () => {
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-sm flex items-center justify-center gap-2 shadow-sm cursor-pointer transition-colors"
+          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-xs transition-colors text-sm cursor-pointer"
         >
           <Plus className="w-4 h-4" />
-          <span>Novo Cliente</span>
+          Novo Cliente
         </button>
       </div>
 
       {/* Customers List */}
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredCustomers.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center border border-gray-200 text-gray-500">
-            Nenhum cliente encontrado.
+          <div className="col-span-full bg-white rounded-2xl p-8 text-center text-gray-500 border border-gray-100 shadow-xs">
+            Nenhum cliente cadastrado ainda.
           </div>
         ) : (
-          filteredCustomers.map(cust => (
-            <div 
-              key={cust.id} 
-              className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs hover:border-emerald-300 transition-all space-y-3"
-            >
+          filteredCustomers.map((cust) => (
+            <div key={cust.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:shadow-md transition-shadow space-y-3">
               <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-base">
-                    {cust.name.charAt(0)}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-gray-900 text-base">{cust.name}</h4>
-                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                      <Phone className="w-3.5 h-3.5 text-gray-400" />
-                      <span>{cust.phone}</span>
-                    </p>
-                  </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-lg leading-tight">{cust.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{cust.email || 'Sem e-mail'}</p>
                 </div>
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => handleOpenModal(cust)}
-                    className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                    className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
                     title="Editar"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
                   <button 
-                    onClick={() => {
-                      if(confirm(`Deseja realmente remover o cliente ${cust.name}?`)) {
-                        deleteCustomer(cust.id);
-                      }
-                    }}
-                    className="p-2 text-gray-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    onClick={() => deleteCustomer(cust.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                     title="Excluir"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 pt-1">
+                <div className="flex items-center gap-1.5 truncate">
+                  <Phone className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  <span className="truncate font-medium">{cust.phone}</span>
+                </div>
+                {cust.rg && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-gray-500">RG:</span>
+                    <span>{cust.rg}</span>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-gray-100 text-xs text-gray-600 grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -335,6 +374,71 @@ export const Customers: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Styled Diagnostic Results Modal */}
+      {diagModal.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 text-slate-100 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            
+            <div className={`p-4 border-b flex items-center justify-between ${diagModal.success ? 'bg-emerald-900/40 border-emerald-500/30' : 'bg-rose-900/40 border-rose-500/30'}`}>
+              <div className="flex items-center gap-2">
+                {diagModal.success ? (
+                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                )}
+                <h3 className={`font-bold text-base ${diagModal.success ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {diagModal.title}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setDiagModal(prev => ({ ...prev, isOpen: false }))}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs font-mono">
+              {diagModal.error && (
+                <div className="space-y-1">
+                  <div className="text-slate-400 font-sans font-semibold text-xs">MOTIVO / ERRO DETALHADO DO BANCO:</div>
+                  <pre className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-rose-300 overflow-x-auto whitespace-pre-wrap">
+                    {diagModal.error}
+                  </pre>
+                </div>
+              )}
+
+              {diagModal.payloadSent && (
+                <div className="space-y-1">
+                  <div className="text-slate-400 font-sans font-semibold text-xs">DADOS ENVIADOS NA REQUISIÇÃO:</div>
+                  <pre className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-emerald-300 overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(diagModal.payloadSent, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between gap-3">
+              <button
+                onClick={handleCopyDiag}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-sans text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                {diagModal.copied ? 'Copiado para a área de transferência!' : 'Copiar Diagnóstico Completo'}
+              </button>
+
+              <button
+                onClick={() => setDiagModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-sans text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+
           </div>
         </div>
       )}
