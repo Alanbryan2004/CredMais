@@ -532,20 +532,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let res: any;
     let errorMsg: string | null = null;
+    let insertedData: any = null;
 
     try {
       res = await executeGql(mutation, { object: insertObj });
       let errors = res?.error || res?.errors || res?.body?.errors;
+      insertedData = res?.data?.insert_customers_one || res?.body?.data?.insert_customers_one;
 
-      if (errors) {
+      if (errors && !insertedData) {
         errorMsg = typeof errors === 'string' ? errors : JSON.stringify(errors);
         // Try fallback with explicit user_id if present
         if (userId) {
           const objWithUser = { ...insertObj, user_id: userId };
           const resUser: any = await executeGql(mutation, { object: objWithUser });
           const userErrors = resUser?.error || resUser?.errors || resUser?.body?.errors;
-          if (!userErrors && resUser?.data?.insert_customers_one) {
+          const fallbackData = resUser?.data?.insert_customers_one || resUser?.body?.data?.insert_customers_one;
+          if (!userErrors && fallbackData) {
             res = resUser;
+            insertedData = fallbackData;
             errorMsg = null;
           } else if (userErrors) {
             errorMsg += ' | Tentativa com user_id explícito: ' + JSON.stringify(userErrors);
@@ -559,10 +563,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const payloadInfo = {
       ...insertObj,
       tokenPresent: !!token,
-      activeUserId: userId || 'NENHUM (Usuário não localizado no SDK)'
+      activeUserId: userId || 'NENHUM (Usuário não localizado no SDK)',
+      rawResData: res?.data || res?.body?.data || null
     };
 
-    if (!errorMsg && res?.data?.insert_customers_one) {
+    if (!errorMsg && (insertedData || res?.data || res?.body?.data)) {
       setCustomers(prev => [newCust, ...prev]);
       return {
         success: true,
@@ -572,7 +577,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       return {
         success: false,
-        error: errorMsg || 'Não foi possível salvar o cliente no Hasura Nhost.',
+        error: errorMsg || `Falha na resposta GraphQL Nhost: ${JSON.stringify(res)}`,
         payloadSent: payloadInfo
       };
     }
