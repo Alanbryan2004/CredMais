@@ -50,10 +50,21 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Helper to ensure Nhost backend accepts passwords starting from 8 characters
+// Helper for RFC 4122 v4 UUID generation
+const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// Helper to format password for Nhost auth
 const formatAuthPassword = (pass: string): string => {
   if (!pass) return pass;
-  // If user password is 8 characters, append suffix to satisfy Nhost Auth default 9-character min length
   return pass.length < 9 ? `${pass}#Cred1` : pass;
 };
 
@@ -91,15 +102,31 @@ export const translateAuthError = (err: any): string => {
     return 'E-mail ou senha incorretos. Verifique suas credenciais.';
   }
   if (lower.includes('email not verified') || lower.includes('unverified')) {
-    return 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+    return 'Seu e-mail ainda não foi confirmed. Verifique sua caixa de entrada.';
   }
 
-  // Fallback translation if English message returned
   if (/[a-zA-Z]/.test(msg) && (lower.includes('password') || lower.includes('user') || lower.includes('error') || lower.includes('invalid'))) {
-    return 'Não foi possível concluir o cadastro com os dados informados. Verifique se a senha tem pelo menos 8 caracteres.';
+    return 'Não foi possível concluir a operação. Verifique seus dados e tente novamente.';
   }
 
   return msg;
+};
+
+// Helper for executing GraphQL requests with Nhost token safely
+const executeGql = async (query: string, variables?: any) => {
+  try {
+    const token = nhost.auth.getAccessToken();
+    const reqPayload = variables ? { query, variables } : { query };
+    if (token) {
+      return await nhost.graphql.request(reqPayload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    }
+    return await nhost.graphql.request(reqPayload);
+  } catch (err) {
+    console.error('Nhost GraphQL execution error:', err);
+    return { error: err };
+  }
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -109,7 +136,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [user, setUser] = useState<{ id?: string; name: string; email: string } | null>(() => {
     const saved = localStorage.getItem('credmais_user');
-    return saved ? JSON.parse(saved) : { name: 'Marcos Paulo', email: 'admin@credmais.com' };
+    return saved ? JSON.parse(saved) : null;
   });
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
@@ -141,17 +168,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Nhost GraphQL helper for fetching data
+  const getOrFetchUserId = async (): Promise<string | null> => {
+    if (user?.id && typeof user.id === 'string' && user.id.length > 10) {
+      return user.id;
+    }
+
+    const nhostUser = nhost.auth.getUser();
+    if (nhostUser?.id) return nhostUser.id;
+
+    const savedUser = localStorage.getItem('credmais_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.id && typeof parsed.id === 'string' && parsed.id.length > 10) {
+          return parsed.id;
+        }
+      } catch (e) {}
+    }
+
+    return null;
+  };
+
   const fetchRemoteData = async () => {
     setIsSyncing(true);
     try {
-      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-      const token = session?.accessToken;
-      const currentUserId = session?.user?.id;
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const currentUserId = await getOrFetchUserId();
 
       const query = `
         query GetCredMaisData {
@@ -166,8 +207,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       `;
-      const res = await nhost.graphql.request({ query }, { headers });
-      const data = (res as any)?.data || (res as any)?.body?.data;
+      const res: any = await executeGql(query);
+      const data = res?.data || res?.body?.data;
       if (data) {
         const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = data;
         if (remoteCust && Array.isArray(remoteCust)) {
@@ -270,23 +311,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    getOrFetchUserId();
     fetchRemoteData();
 
-    // Auto sync background polling every 8 seconds
     const interval = setInterval(() => {
       fetchRemoteData();
-    }, 8000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
-  // Login via Nhost Auth
   const login = async (email: string, pass: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const res = await nhost.auth.signInEmailPassword({ email, password: formatAuthPassword(pass) });
       
-      // Check for error in response
       if ((res as any)?.error || (res as any)?.body?.error) {
         const errObj = (res as any)?.error || (res as any)?.body?.error;
         return { 
@@ -316,7 +353,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { success: false, error: 'Credenciais inválidas. Verifique seu e-mail e senha.' };
   };
 
-  // Sign Up via Nhost Auth
   const signUp = async (data: SignUpData): Promise<{ success: boolean; message?: string; error?: string }> => {
     const fullName = `${data.firstName} ${data.lastName}`.trim();
     try {
@@ -355,7 +391,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         return { 
           success: true, 
-          message: 'Cadastro realizado com sucesso! Se você ativou verificação de e-mail no Nhost, confira sua caixa de entrada antes de logar.' 
+          message: 'Cadastro realizado com sucesso! Se a verificação de e-mail estiver ativada no Nhost, confira sua caixa de entrada.' 
         };
       }
     } catch (e: any) {
@@ -374,7 +410,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Password Recovery via Nhost Auth
   const resetPassword = async (email: string): Promise<{ success: boolean; message?: string; error?: string }> => {
     try {
       const res = await nhost.auth.sendPasswordResetEmail({ email });
@@ -384,7 +419,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: false, error: (res as any).error.message };
       }
     } catch (e: any) {
-      console.log('Nhost Reset Password offline fallback');
+      console.log('Nhost Reset Password fallback');
     }
 
     return { 
@@ -409,41 +444,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('credmais_installments');
   };
 
-  const getOrFetchUserId = async (): Promise<string | null> => {
-    if (user?.id && typeof user.id === 'string' && user.id.length > 10) {
-      return user.id;
-    }
-
-    const savedUser = localStorage.getItem('credmais_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        if (parsed?.id && typeof parsed.id === 'string' && parsed.id.length > 10) {
-          return parsed.id;
-        }
-      } catch (e) {}
-    }
-
-    try {
-      const userRes = await nhost.auth.getUser();
-      const u = (userRes as any)?.user || (userRes as any)?.body?.user || (userRes as any)?.data?.user || userRes;
-      if (u?.id && typeof u.id === 'string') {
-        return u.id;
-      }
-    } catch (e) {}
-
-    const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-    if (session?.user?.id) {
-      return session.user.id;
-    }
-
-    return null;
-  };
-
   const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>) => {
+    const customerId = generateUUID();
     const newCust: Customer = {
       ...cData,
-      id: `cust-${Date.now()}`,
+      id: customerId,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
@@ -451,25 +456,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const userId = await getOrFetchUserId();
-      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-      const token = session?.accessToken;
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
 
       const insertObj: any = {
+        id: customerId,
         name: cData.name,
-        email: cData.email,
+        email: cData.email || null,
         phone: cData.phone,
         birth_date: cData.birthDate || null,
-        cpf: cData.cpf,
-        rg: cData.rg,
-        cep: cData.cep,
-        address: cData.address,
-        number: cData.number,
-        complement: cData.complement,
-        notes: cData.notes
+        cpf: cData.cpf || null,
+        rg: cData.rg || null,
+        cep: cData.cep || null,
+        address: cData.address || null,
+        number: cData.number || null,
+        complement: cData.complement || null,
+        notes: cData.notes || null
       };
 
       if (userId) {
@@ -485,24 +485,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       `;
       
-      const res: any = await nhost.graphql.request(
-        { query: mutation, variables: { object: insertObj } },
-        { headers }
-      );
+      const res: any = await executeGql(mutation, { object: insertObj });
       const hasError = res?.error || res?.errors || res?.body?.errors;
       if (hasError) {
-        console.log('Nhost Insert Customer error, tentando fallback sem user_id...', hasError);
+        console.warn('Nhost Insert Customer com user_id falhou, tentando sem user_id...', hasError);
         delete insertObj.user_id;
-        const resFallback: any = await nhost.graphql.request(
-          { query: mutation, variables: { object: insertObj } },
-          { headers }
-        );
+        const resFallback: any = await executeGql(mutation, { object: insertObj });
         console.log('Resultado Nhost Insert Customer Fallback:', resFallback);
       } else {
         console.log('Sucesso Nhost Insert Customer:', res);
       }
     } catch (e) {
-      console.log('Erro ao salvar cliente no Nhost GraphQL:', e);
+      console.error('Erro ao salvar cliente no Nhost GraphQL:', e);
     }
 
     return newCust;
@@ -510,54 +504,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateCustomer = async (updated: Customer) => {
     setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+
+    try {
+      const mutation = `
+        mutation UpdateCustomer($id: uuid!, $set: customers_set_input!) {
+          update_customers_by_pk(pk_columns: { id: $id }, _set: $set) {
+            id
+          }
+        }
+      `;
+      await executeGql(mutation, {
+        id: updated.id,
+        set: {
+          name: updated.name,
+          email: updated.email || null,
+          phone: updated.phone,
+          birth_date: updated.birthDate || null,
+          cpf: updated.cpf || null,
+          rg: updated.rg || null,
+          cep: updated.cep || null,
+          address: updated.address || null,
+          number: updated.number || null,
+          complement: updated.complement || null,
+          notes: updated.notes || null
+        }
+      });
+    } catch (e) {
+      console.error('Erro ao atualizar cliente no Nhost:', e);
+    }
   };
 
   const deleteCustomer = async (id: string) => {
     setCustomers(prev => prev.filter(c => c.id !== id));
+
+    try {
+      const mutation = `
+        mutation DeleteCustomer($id: uuid!) {
+          delete_customers_by_pk(id: $id) {
+            id
+          }
+        }
+      `;
+      await executeGql(mutation, { id });
+    } catch (e) {
+      console.error('Erro ao deletar cliente no Nhost:', e);
+    }
   };
 
   const addContract = async (cntData: Omit<Contract, 'id' | 'createdAt' | 'status'>) => {
-    const newId = `cnt-${Date.now()}`;
+    const contractId = generateUUID();
     const newContract: Contract = {
       ...cntData,
-      id: newId,
+      id: contractId,
       status: 'Ativo',
       createdAt: new Date().toISOString().split('T')[0]
     };
 
+    const userId = await getOrFetchUserId();
     const newInstallments: Installment[] = [];
+    const installmentObjs: any[] = [];
     const baseDate = new Date(cntData.startDate);
 
     for (let i = 1; i <= cntData.totalInstallments; i++) {
       const dueDate = new Date(baseDate);
       dueDate.setDate(baseDate.getDate() + (i * cntData.periodDays));
 
+      const instId = generateUUID();
+      const dueDateStr = dueDate.toISOString().split('T')[0];
+
       newInstallments.push({
-        id: `inst-${newId}-${i}`,
-        contractId: newId,
+        id: instId,
+        contractId: contractId,
         installmentNumber: i,
         totalInstallments: cntData.totalInstallments,
-        dueDate: dueDate.toISOString().split('T')[0],
+        dueDate: dueDateStr,
         originalAmount: cntData.installmentAmount,
         dailyLateFee: cntData.dailyLateFee || 0,
         paidAmount: 0,
         status: 'A vencer'
       });
+
+      const instObj: any = {
+        id: instId,
+        contract_id: contractId,
+        installment_number: i,
+        total_installments: cntData.totalInstallments,
+        due_date: dueDateStr,
+        original_amount: cntData.installmentAmount,
+        daily_late_fee: cntData.dailyLateFee || 0,
+        paid_amount: 0,
+        status: 'A vencer'
+      };
+      if (userId) instObj.user_id = userId;
+      installmentObjs.push(instObj);
     }
 
     setContracts(prev => [newContract, ...prev]);
     setInstallments(prev => [...newInstallments, ...prev]);
 
     try {
-      const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
-      const token = session?.accessToken;
-      const userId = await getOrFetchUserId();
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
       const contractObj: any = {
+        id: contractId,
         contract_number: cntData.contractNumber,
         customer_id: cntData.customerId,
         customer_name: cntData.customerName,
@@ -569,7 +616,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         installment_amount: cntData.installmentAmount,
         total_to_receive: cntData.totalToReceive,
         daily_late_fee: cntData.dailyLateFee || 0,
-        notes: cntData.notes,
+        notes: cntData.notes || null,
         status: 'Ativo'
       };
 
@@ -578,26 +625,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const mutation = `
-        mutation InsertContract($object: contracts_insert_input!) {
-          insert_contracts_one(object: $object) {
+        mutation InsertContractAndInstallments(
+          $contract: contracts_insert_input!,
+          $installments: [installments_insert_input!]!
+        ) {
+          insert_contracts_one(object: $contract) {
             id
+          }
+          insert_installments(objects: $installments) {
+            affected_rows
           }
         }
       `;
-      try {
-        await nhost.graphql.request(
-          { query: mutation, variables: { object: contractObj } },
-          { headers }
-        );
-      } catch (err) {
+
+      const res: any = await executeGql(mutation, {
+        contract: contractObj,
+        installments: installmentObjs
+      });
+
+      const hasError = res?.error || res?.errors || res?.body?.errors;
+      if (hasError) {
+        console.warn('Nhost Insert Contract falhou com user_id, tentando sem user_id...', hasError);
         delete contractObj.user_id;
-        await nhost.graphql.request(
-          { query: mutation, variables: { object: contractObj } },
-          { headers }
-        );
+        const cleanInst = installmentObjs.map(i => {
+          const { user_id, ...rest } = i;
+          return rest;
+        });
+        await executeGql(mutation, {
+          contract: contractObj,
+          installments: cleanInst
+        });
       }
     } catch (e) {
-      console.log('Erro ao salvar contrato no Nhost GraphQL:', e);
+      console.error('Erro ao salvar contrato no Nhost GraphQL:', e);
     }
   };
 
@@ -608,6 +668,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteContract = async (id: string) => {
     setContracts(prev => prev.filter(c => c.id !== id));
     setInstallments(prev => prev.filter(i => i.contractId !== id));
+
+    try {
+      const mutation = `
+        mutation DeleteContract($id: uuid!) {
+          delete_contracts_by_pk(id: $id) {
+            id
+          }
+        }
+      `;
+      await executeGql(mutation, { id });
+    } catch (e) {
+      console.error('Erro ao deletar contrato no Nhost:', e);
+    }
   };
 
   const calculateLateFee = (inst: Installment): number => {
@@ -641,6 +714,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     feeDays?: number;
     note?: string;
   }) => {
+    let updatedPaidAmount = 0;
+    let updatedPaidDate: string | undefined = undefined;
+    let updatedDueDate: string | undefined = undefined;
+    let updatedStatus = 'A vencer';
+
     setInstallments(prev => prev.map(inst => {
       if (inst.id !== installmentId) return inst;
 
@@ -656,6 +734,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updatedHistory = [...(inst.history || []), historyEntry];
 
       if (type === 'TOTAL') {
+        updatedPaidAmount = inst.originalAmount;
+        updatedPaidDate = todayStr;
+        updatedStatus = 'Pago';
         return {
           ...inst,
           paidAmount: inst.originalAmount,
@@ -666,6 +747,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (type === 'JUROS') {
+        updatedDueDate = newDueDate || inst.dueDate;
+        updatedStatus = 'A vencer';
         return {
           ...inst,
           dueDate: newDueDate || inst.dueDate,
@@ -677,6 +760,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (type === 'PARCIAL') {
         const newPaidAmount = inst.paidAmount + amountPaid;
         const isFullyPaid = newPaidAmount >= inst.originalAmount;
+        updatedPaidAmount = newPaidAmount;
+        updatedPaidDate = isFullyPaid ? todayStr : undefined;
+        updatedDueDate = newDueDate || inst.dueDate;
+        updatedStatus = isFullyPaid ? 'Pago' : 'Pago Parcial';
         return {
           ...inst,
           paidAmount: newPaidAmount,
@@ -689,6 +776,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return inst;
     }));
+
+    try {
+      const mutation = `
+        mutation UpdateInstallment($id: uuid!, $set: installments_set_input!) {
+          update_installments_by_pk(pk_columns: { id: $id }, _set: $set) {
+            id
+          }
+        }
+      `;
+      const setPayload: any = {
+        paid_amount: updatedPaidAmount,
+        status: updatedStatus
+      };
+      if (updatedPaidDate) setPayload.paid_date = updatedPaidDate;
+      if (updatedDueDate) setPayload.due_date = updatedDueDate;
+
+      await executeGql(mutation, { id: installmentId, set: setPayload });
+    } catch (e) {
+      console.error('Erro ao atualizar parcela no Nhost:', e);
+    }
   };
 
   const formatCurrency = (val: number) => {
