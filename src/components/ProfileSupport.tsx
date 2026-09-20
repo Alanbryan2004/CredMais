@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Save, MessageSquare, ShieldCheck, UserCheck, UserX, AlertCircle, Clock } from 'lucide-react';
+import { Save, MessageSquare, ShieldCheck, UserCheck, UserX, Clock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export const Profile: React.FC = () => {

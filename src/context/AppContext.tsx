@@ -188,7 +188,7 @@ const executeGql = async (query: string, variables?: any) => {
       if (isJwtExpired) {
         console.warn('JWT expirado detectado, renovando sessão no Nhost...');
         try {
-          await nhost.auth.refreshSession();
+          await (nhost.auth as any).refreshSession();
         } catch (e) {}
         return await nhost.graphql.request(reqPayload);
       }
@@ -454,10 +454,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const session = (res as any)?.body?.session || (res as any)?.session;
       if (session?.user) {
+        const uEmail = session.user.email || email;
+        const isAdmin = checkIsAdmin(uEmail);
+        const isApproved = isAdmin || approvedUsers.includes(uEmail.toLowerCase());
         const userObj = {
           id: session.user.id,
           name: session.user.displayName || email.split('@')[0],
-          email: session.user.email || email
+          email: uEmail,
+          isAdmin,
+          isApproved
         };
         setUser(userObj);
         localStorage.setItem('credmais_user', JSON.stringify(userObj));
@@ -497,10 +502,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const session = (res as any)?.body?.session || (res as any)?.session;
       if (session?.user) {
+        const uEmail = data.email;
+        const isAdmin = checkIsAdmin(uEmail);
+        const isApproved = isAdmin || approvedUsers.includes(uEmail.toLowerCase());
         const userObj = { 
           id: session.user.id,
           name: fullName, 
-          email: data.email 
+          email: uEmail,
+          isAdmin,
+          isApproved
         };
         setUser(userObj);
         localStorage.setItem('credmais_user', JSON.stringify(userObj));

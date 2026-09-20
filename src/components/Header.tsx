@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, Bell, RefreshCw } from 'lucide-react';
+import { Menu, Bell } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 interface HeaderProps {
@@ -8,7 +8,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSidebar, activeTab }) => {
-  const { installments, isSyncing, refreshData } = useApp();
+  const { installments } = useApp();
 
   const overdueCount = installments.filter(i => i.status === 'Atrasado').length;
   const todayCount = installments.filter(i => i.status === 'Vencendo Hoje').length;
