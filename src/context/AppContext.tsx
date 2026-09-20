@@ -472,10 +472,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notes: cData.notes || null
       };
 
-      if (userId) {
-        insertObj.user_id = userId;
-      }
-
       const mutation = `
         mutation InsertCustomer($object: customers_insert_input!) {
           insert_customers_one(object: $object) {
@@ -485,18 +481,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       `;
       
-      const res: any = await executeGql(mutation, { object: insertObj });
-      const hasError = res?.error || res?.errors || res?.body?.errors;
-      if (hasError) {
-        console.warn('Nhost Insert Customer com user_id falhou, tentando sem user_id...', hasError);
-        delete insertObj.user_id;
-        const resFallback: any = await executeGql(mutation, { object: insertObj });
-        console.log('Resultado Nhost Insert Customer Fallback:', resFallback);
+      // Try first without explicit user_id (letting Hasura X-Hasura-User-Id Column Preset populate it)
+      let res: any = await executeGql(mutation, { object: insertObj });
+      let errors = res?.error || res?.errors || res?.body?.errors;
+
+      if (errors) {
+        console.warn('Nhost Insert Customer sem user_id falhou, tentando com user_id explícito...', errors);
+        if (userId) {
+          insertObj.user_id = userId;
+          res = await executeGql(mutation, { object: insertObj });
+          errors = res?.error || res?.errors || res?.body?.errors;
+        }
+      }
+
+      if (errors) {
+        console.error('Erro final ao salvar cliente no Nhost:', errors);
       } else {
         console.log('Sucesso Nhost Insert Customer:', res);
       }
     } catch (e) {
-      console.error('Erro ao salvar cliente no Nhost GraphQL:', e);
+      console.error('Erro de execução ao salvar cliente no Nhost GraphQL:', e);
     }
 
     return newCust;
