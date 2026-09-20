@@ -58,27 +58,33 @@ export const Customers: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || !formData.phone) {
-      alert('Por favor informe pelo menos o Nome e Telefone do Cliente.');
-      return;
-    }
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    try {
+      if (!formData.name || !formData.phone) {
+        alert('Por favor informe pelo menos o Nome e Telefone do Cliente.');
+        return;
+      }
 
-    if (selectedCustomer) {
-      await updateCustomer({
-        ...selectedCustomer,
-        ...formData
-      });
-      setIsModalOpen(false);
-    } else {
-      const result = await addCustomer(formData);
-      if (result.success) {
-        alert(`✅ CLIENTE SALVO NO BANCO COM SUCESSO!\n\nID do Cliente: ${result.customer?.id}\nUser ID Identificado: ${result.payloadSent?.activeUserId}\nToken Nhost Presente: ${result.payloadSent?.tokenPresent ? 'SIM' : 'NÃO'}`);
+      if (selectedCustomer) {
+        await updateCustomer({
+          ...selectedCustomer,
+          ...formData
+        });
         setIsModalOpen(false);
       } else {
-        alert(`❌ FALHA AO SALVAR NO BANCO NHOST!\n\nMOTIVO / ERRO DO BANCO:\n${result.error}\n\nDADOS ENVIADOS:\n${JSON.stringify(result.payloadSent, null, 2)}`);
+        const result = await addCustomer(formData);
+        if (result && result.success) {
+          alert(`✅ CLIENTE SALVO NO BANCO COM SUCESSO!\n\nID do Cliente: ${result.customer?.id}\nUser ID Identificado: ${result.payloadSent?.activeUserId}\nToken Nhost Presente: ${result.payloadSent?.tokenPresent ? 'SIM' : 'NÃO'}`);
+          setIsModalOpen(false);
+        } else {
+          const errorText = result?.error || 'Erro desconhecido ao comunicar com Nhost GraphQL';
+          const payloadText = result?.payloadSent ? JSON.stringify(result.payloadSent, null, 2) : 'Payload não gerado';
+          alert(`❌ FALHA AO SALVAR NO BANCO NHOST!\n\nMOTIVO / ERRO DO BANCO:\n${errorText}\n\nDADOS ENVIADOS:\n${payloadText}`);
+        }
       }
+    } catch (err: any) {
+      alert(`❌ ERRO NO APLICATIVO ao tentar salvar:\n${err?.message || JSON.stringify(err)}`);
     }
   };
 
@@ -322,6 +328,7 @@ export const Customers: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  onClick={(e) => handleSave(e)}
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm shadow-sm cursor-pointer"
                 >
                   Salvar Cliente
