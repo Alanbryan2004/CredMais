@@ -58,7 +58,7 @@ export const Customers: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone) {
       alert('Por favor informe pelo menos o Nome e Telefone do Cliente.');
@@ -66,14 +66,20 @@ export const Customers: React.FC = () => {
     }
 
     if (selectedCustomer) {
-      updateCustomer({
+      await updateCustomer({
         ...selectedCustomer,
         ...formData
       });
+      setIsModalOpen(false);
     } else {
-      addCustomer(formData);
+      const result = await addCustomer(formData);
+      if (result.success) {
+        alert(`✅ CLIENTE SALVO NO BANCO COM SUCESSO!\n\nID do Cliente: ${result.customer?.id}\nUser ID Identificado: ${result.payloadSent?.activeUserId}\nToken Nhost Presente: ${result.payloadSent?.tokenPresent ? 'SIM' : 'NÃO'}`);
+        setIsModalOpen(false);
+      } else {
+        alert(`❌ FALHA AO SALVAR NO BANCO NHOST!\n\nMOTIVO / ERRO DO BANCO:\n${result.error}\n\nDADOS ENVIADOS:\n${JSON.stringify(result.payloadSent, null, 2)}`);
+      }
     }
-    setIsModalOpen(false);
   };
 
   const filteredCustomers = customers.filter(c => 

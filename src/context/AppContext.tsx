@@ -23,7 +23,7 @@ interface AppContextType {
   refreshData: () => Promise<void>;
   
   customers: Customer[];
-  addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Promise<Customer>;
+  addCustomer: (c: Omit<Customer, 'id' | 'createdAt'>) => Promise<{ success: boolean; customer?: Customer; error?: string; payloadSent?: any }>;
   updateCustomer: (c: Customer) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
   
@@ -444,7 +444,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('credmais_installments');
   };
 
-  const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>) => {
+  const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>): Promise<{ success: boolean; customer?: Customer; error?: string; payloadSent?: any }> => {
     const customerId = generateUUID();
     const newCust: Customer = {
       ...cData,
@@ -452,58 +452,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    setCustomers(prev => [newCust, ...prev]);
+    const userId = await getOrFetchUserId();
+    const token = nhost.auth.getAccessToken();
+
+    const insertObj: any = {
+      id: customerId,
+      name: cData.name,
+      email: cData.email || null,
+      phone: cData.phone,
+      birth_date: cData.birthDate || null,
+      cpf: cData.cpf || null,
+      rg: cData.rg || null,
+      cep: cData.cep || null,
+      address: cData.address || null,
+      number: cData.number || null,
+      complement: cData.complement || null,
+      notes: cData.notes || null
+    };
+
+    const mutation = `
+      mutation InsertCustomer($object: customers_insert_input!) {
+        insert_customers_one(object: $object) {
+          id
+          user_id
+          name
+        }
+      }
+    `;
+
+    let res: any;
+    let errorMsg: string | null = null;
 
     try {
-      const userId = await getOrFetchUserId();
-
-      const insertObj: any = {
-        id: customerId,
-        name: cData.name,
-        email: cData.email || null,
-        phone: cData.phone,
-        birth_date: cData.birthDate || null,
-        cpf: cData.cpf || null,
-        rg: cData.rg || null,
-        cep: cData.cep || null,
-        address: cData.address || null,
-        number: cData.number || null,
-        complement: cData.complement || null,
-        notes: cData.notes || null
-      };
-
-      const mutation = `
-        mutation InsertCustomer($object: customers_insert_input!) {
-          insert_customers_one(object: $object) {
-            id
-            user_id
-          }
-        }
-      `;
-      
-      // Try first without explicit user_id (letting Hasura X-Hasura-User-Id Column Preset populate it)
-      let res: any = await executeGql(mutation, { object: insertObj });
+      res = await executeGql(mutation, { object: insertObj });
       let errors = res?.error || res?.errors || res?.body?.errors;
 
       if (errors) {
-        console.warn('Nhost Insert Customer sem user_id falhou, tentando com user_id explícito...', errors);
+        errorMsg = typeof errors === 'string' ? errors : JSON.stringify(errors);
+        // Try fallback with explicit user_id if present
         if (userId) {
-          insertObj.user_id = userId;
-          res = await executeGql(mutation, { object: insertObj });
-          errors = res?.error || res?.errors || res?.body?.errors;
+          const objWithUser = { ...insertObj, user_id: userId };
+          const resUser: any = await executeGql(mutation, { object: objWithUser });
+          const userErrors = resUser?.error || resUser?.errors || resUser?.body?.errors;
+          if (!userErrors && resUser?.data?.insert_customers_one) {
+            res = resUser;
+            errorMsg = null;
+          } else if (userErrors) {
+            errorMsg += ' | Tentativa com user_id explícito: ' + JSON.stringify(userErrors);
+          }
         }
       }
-
-      if (errors) {
-        console.error('Erro final ao salvar cliente no Nhost:', errors);
-      } else {
-        console.log('Sucesso Nhost Insert Customer:', res);
-      }
-    } catch (e) {
-      console.error('Erro de execução ao salvar cliente no Nhost GraphQL:', e);
+    } catch (e: any) {
+      errorMsg = e?.message || JSON.stringify(e);
     }
 
-    return newCust;
+    const payloadInfo = {
+      ...insertObj,
+      tokenPresent: !!token,
+      activeUserId: userId || 'NENHUM (Usuário não localizado no SDK)'
+    };
+
+    if (!errorMsg && res?.data?.insert_customers_one) {
+      setCustomers(prev => [newCust, ...prev]);
+      return {
+        success: true,
+        customer: newCust,
+        payloadSent: payloadInfo
+      };
+    } else {
+      return {
+        success: false,
+        error: errorMsg || 'Não foi possível salvar o cliente no Hasura Nhost.',
+        payloadSent: payloadInfo
+      };
+    }
   };
 
   const updateCustomer = async (updated: Customer) => {
