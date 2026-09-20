@@ -8,11 +8,15 @@ import { Customers } from './components/Customers';
 import { Contracts } from './components/Contracts';
 import { InstallmentsView } from './components/InstallmentsView';
 import { Profile, Support } from './components/ProfileSupport';
+import { useAutoUpdate } from './hooks/useAutoUpdate';
 
 const MainApp: React.FC = () => {
   const { isAuthenticated } = useApp();
   const [activeTab, setActiveTab] = useState<string>('inicio');
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+
+  // Auto-reload client whenever a new release build is published
+  useAutoUpdate();
 
   if (!isAuthenticated) {
     return <Login />;

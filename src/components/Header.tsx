@@ -38,16 +38,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSidebar, activeTab }) => {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Sync Indicator / Refresh Button */}
-        <button
-          onClick={() => refreshData()}
-          disabled={isSyncing}
-          className="p-2 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer text-xs font-semibold"
-          title="Sincronizar Dados em Tempo Real"
-        >
-          <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-emerald-600' : ''}`} />
-          <span className="hidden md:inline text-xs text-gray-600">{isSyncing ? 'Sincronizando...' : 'Atualizado'}</span>
-        </button>
 
         {(overdueCount > 0 || todayCount > 0) && (
           <div className="relative">
