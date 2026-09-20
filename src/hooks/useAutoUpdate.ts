@@ -10,13 +10,16 @@ export const useAutoUpdate = () => {
           cache: 'no-store'
         });
         if (res.ok) {
-          const data = await res.json();
-          if (data && data.version) {
-            if (currentVersion === null) {
-              currentVersion = data.version;
-            } else if (currentVersion !== data.version) {
-              console.log('⚡ Nova versão publicada detectada! Recarregando cliente...');
-              window.location.reload();
+          const text = await res.text();
+          if (text && text.trim().startsWith('{')) {
+            const data = JSON.parse(text);
+            if (data && data.version) {
+              if (currentVersion === null) {
+                currentVersion = data.version;
+              } else if (currentVersion !== data.version) {
+                console.log('⚡ Nova versão publicada detectada! Recarregando cliente...');
+                window.location.reload();
+              }
             }
           }
         }
