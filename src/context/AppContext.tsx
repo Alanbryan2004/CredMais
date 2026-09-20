@@ -419,7 +419,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const parsed = JSON.parse(savedUser);
         if (parsed?.id && typeof parsed.id === 'string' && parsed.id.length > 10) {
-          if (!user?.id) setUser(parsed);
           return parsed.id;
         }
       } catch (e) {}
@@ -429,26 +428,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const userRes = await nhost.auth.getUser();
       const u = (userRes as any)?.user || (userRes as any)?.body?.user || (userRes as any)?.data?.user || userRes;
       if (u?.id && typeof u.id === 'string') {
-        const updatedUser = { 
-          id: u.id, 
-          name: u.displayName || user?.name || 'Usuário', 
-          email: u.email || user?.email || '' 
-        };
-        setUser(updatedUser);
-        localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
         return u.id;
       }
     } catch (e) {}
 
     const session = (nhost.auth as any)?.getSession?.() || (nhost.auth as any)?.session;
     if (session?.user?.id) {
-      const updatedUser = {
-        id: session.user.id,
-        name: session.user.displayName || user?.name || 'Usuário',
-        email: session.user.email || user?.email || ''
-      };
-      setUser(updatedUser);
-      localStorage.setItem('credmais_user', JSON.stringify(updatedUser));
       return session.user.id;
     }
 
