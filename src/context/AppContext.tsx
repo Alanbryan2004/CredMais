@@ -17,7 +17,12 @@ interface AppContextType {
   loginWithGoogle: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => void;
-  user: { id?: string; name: string; email: string } | null;
+  user: { id?: string; name: string; email: string; isAdmin: boolean; isApproved: boolean } | null;
+  
+  approvedUsers: string[];
+  approveUser: (email: string) => void;
+  revokeUser: (email: string) => void;
+  userRegistry: { id: string; name: string; email: string; isApproved: boolean }[];
   
   isSyncing: boolean;
   refreshData: () => Promise<void>;
@@ -49,6 +54,13 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// Helper to determine if an email belongs to an Admin (Alan or Daniel)
+const checkIsAdmin = (email: string): boolean => {
+  if (!email) return false;
+  const e = email.toLowerCase();
+  return e.includes('alan') || e.includes('daniel') || e.includes('admin');
+};
 
 // Helper for RFC 4122 v4 UUID generation
 const generateUUID = (): string => {
@@ -198,10 +210,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('credmais_auth') === 'true';
   });
 
-  const [user, setUser] = useState<{ id?: string; name: string; email: string } | null>(() => {
-    const saved = localStorage.getItem('credmais_user');
-    return saved ? JSON.parse(saved) : null;
+  const [approvedUsers, setApprovedUsers] = useState<string[]>(() => {
+    const saved = localStorage.getItem('credmais_approved_users');
+    return saved ? JSON.parse(saved) : [];
   });
+
+  const [userRegistry, setUserRegistry] = useState<{ id: string; name: string; email: string; isApproved: boolean }[]>(() => {
+    const saved = localStorage.getItem('credmais_user_registry');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('credmais_approved_users', JSON.stringify(approvedUsers));
+  }, [approvedUsers]);
+
+  useEffect(() => {
+    localStorage.setItem('credmais_user_registry', JSON.stringify(userRegistry));
+  }, [userRegistry]);
+
+  const [user, setUser] = useState<{ id?: string; name: string; email: string; isAdmin: boolean; isApproved: boolean } | null>(() => {
+    const saved = localStorage.getItem('credmais_user');
+    if (!saved) return null;
+    try {
+      const parsed = JSON.parse(saved);
+      const isAdmin = checkIsAdmin(parsed.email);
+      const isApproved = isAdmin || (saved ? JSON.parse(localStorage.getItem('credmais_approved_users') || '[]').includes(parsed.email.toLowerCase()) : false);
+      return { ...parsed, isAdmin, isApproved };
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const approveUser = (emailToApprove: string) => {
+    const cleanEmail = emailToApprove.toLowerCase();
+    setApprovedUsers(prev => Array.from(new Set([...prev, cleanEmail])));
+    setUserRegistry(prev => prev.map(u => u.email.toLowerCase() === cleanEmail ? { ...u, isApproved: true } : u));
+    if (user && user.email.toLowerCase() === cleanEmail) {
+      setUser(prev => prev ? { ...prev, isApproved: true } : null);
+    }
+  };
+
+  const revokeUser = (emailToRevoke: string) => {
+    const cleanEmail = emailToRevoke.toLowerCase();
+    setApprovedUsers(prev => prev.filter(e => e !== cleanEmail));
+    setUserRegistry(prev => prev.map(u => u.email.toLowerCase() === cleanEmail ? { ...u, isApproved: false } : u));
+    if (user && user.email.toLowerCase() === cleanEmail && !user.isAdmin) {
+      setUser(prev => prev ? { ...prev, isApproved: false } : null);
+    }
+  };
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     const saved = localStorage.getItem('credmais_customers');
@@ -509,6 +565,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addCustomer = async (cData: Omit<Customer, 'id' | 'createdAt'>): Promise<{ success: boolean; customer?: Customer; error?: string; payloadSent?: any }> => {
+    // Gate write access if user is not approved by Alan or Daniel
+    if (user && !user.isAdmin && !user.isApproved) {
+      return {
+        success: false,
+        error: '⏳ CONTA AGUARDANDO LIBERAÇÃO DE ADMINISTRADOR (ALAN OU DANIEL)\n\nSua conta foi cadastrada com sucesso, mas está aguardando liberação do Administrador para utilizar e salvar novos cadastros no sistema.',
+        payloadSent: {
+          userEmail: user.email,
+          status: 'Aguardando Liberação do Administrador'
+        }
+      };
+    }
+
     const customerId = generateUUID();
     const newCust: Customer = {
       ...cData,
@@ -909,6 +977,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resetPassword,
       logout,
       user,
+      approvedUsers,
+      approveUser,
+      revokeUser,
+      userRegistry,
       isSyncing,
       refreshData,
       customers,
