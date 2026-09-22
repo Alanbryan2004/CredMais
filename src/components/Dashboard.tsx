@@ -15,7 +15,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
 
   const totalBorrowed = contracts.reduce((acc, c) => acc + c.amount, 0);
   const totalToReceive = contracts.reduce((acc, c) => acc + c.totalToReceive, 0);
-  const totalReceived = received.reduce((acc, i) => acc + (i.paidAmount || i.originalAmount), 0);
+  // Calculate total received across all installments and histories (including partial and interest-only payments)
+  const totalReceived = installments.reduce((acc, inst) => {
+    let sum = 0;
+    if (inst.history && inst.history.length > 0) {
+      sum = inst.history.reduce((hAcc, h) => hAcc + (h.amountPaid || 0), 0);
+    } else if (inst.status === 'Pago') {
+      sum = inst.paidAmount || inst.originalAmount;
+    }
+    return acc + sum;
+  }, 0);
 
   // Compute monthly data for the last 6 months (Real database values)
   const now = new Date();
@@ -37,13 +46,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
       return cMonth === m.key ? acc + c.amount : acc;
     }, 0);
 
-    // Total payments received in this month (from paid installments or payment history)
+    // Total payments received in this month (from paid installments OR payment history entries including interest-only)
     const receivedValue = installments.reduce((acc, inst) => {
-      if (inst.status !== 'Pago') return acc;
-      const paidDate = inst.paidDate || inst.dueDate;
-      if (!paidDate) return acc;
-      const pMonth = paidDate.slice(0, 7);
-      return pMonth === m.key ? acc + (inst.paidAmount || inst.originalAmount) : acc;
+      let monthPayment = 0;
+
+      if (inst.history && inst.history.length > 0) {
+        // Sum history payments made in this month (Quitação, Juros, Parcial)
+        monthPayment = inst.history.reduce((hAcc, h) => {
+          if (!h.date) return hAcc;
+          const hMonth = h.date.slice(0, 7);
+          return hMonth === m.key ? hAcc + (h.amountPaid || 0) : hAcc;
+        }, 0);
+      } else if (inst.status === 'Pago') {
+        const paidDate = inst.paidDate || inst.dueDate;
+        if (paidDate && paidDate.slice(0, 7) === m.key) {
+          monthPayment = inst.paidAmount || inst.originalAmount;
+        }
+      }
+
+      return acc + monthPayment;
     }, 0);
 
     return {
