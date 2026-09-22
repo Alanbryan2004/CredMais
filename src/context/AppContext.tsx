@@ -835,7 +835,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateContract = async (updated: Contract) => {
+    // 1. Update contract in state
     setContracts(prev => prev.map(c => c.id === updated.id ? updated : c));
+
+    // 2. Recalculate unpaid installments for this contract
+    setInstallments(prev => {
+      const contractInsts = prev.filter(i => i.contractId === updated.id);
+      const otherInsts = prev.filter(i => i.contractId !== updated.id);
+      
+      const baseDate = new Date(updated.startDate);
+      const updatedContractInsts = contractInsts.map(inst => {
+        // Only adjust unpaid or partially paid installments
+        if (inst.status === 'Pago') return inst;
+
+        const dueDate = new Date(baseDate);
+        dueDate.setDate(baseDate.getDate() + (inst.installmentNumber * updated.periodDays));
+        const dueDateStr = dueDate.toISOString().split('T')[0];
+
+        return {
+          ...inst,
+          totalInstallments: updated.totalInstallments,
+          originalAmount: updated.installmentAmount,
+          dailyLateFee: updated.dailyLateFee || 0,
+          dueDate: dueDateStr
+        };
+      });
+
+      return [...otherInsts, ...updatedContractInsts];
+    });
+
+    // 3. Persist update to Nhost GraphQL
+    try {
+      const mutation = `
+        mutation UpdateContract($id: uuid!, $set: contracts_set_input!) {
+          update_contracts_by_pk(pk_columns: { id: $id }, _set: $set) {
+            id
+          }
+        }
+      `;
+      await executeGql(mutation, {
+        id: updated.id,
+        set: {
+          contract_number: updated.contractNumber,
+          customer_id: updated.customerId,
+          customer_name: updated.customerName,
+          start_date: updated.startDate,
+          amount: updated.amount,
+          interest_rate: updated.interestRate,
+          period_days: updated.periodDays,
+          total_installments: updated.totalInstallments,
+          installment_amount: updated.installmentAmount,
+          total_to_receive: updated.totalToReceive,
+          daily_late_fee: updated.dailyLateFee || 0,
+          notes: updated.notes || null,
+          status: updated.status
+        }
+      });
+
+      // Update unpaid installment amounts/fees in Nhost
+      const updateInstMutation = `
+        mutation UpdateUnpaidInstallments($contractId: uuid!, $amount: numeric!, $fee: numeric!) {
+          update_installments(
+            where: { contract_id: { _eq: $contractId }, status: { _neq: "Pago" } },
+            _set: { original_amount: $amount, daily_late_fee: $fee }
+          ) {
+            affected_rows
+          }
+        }
+      `;
+      await executeGql(updateInstMutation, {
+        contractId: updated.id,
+        amount: updated.installmentAmount,
+        fee: updated.dailyLateFee || 0
+      });
+    } catch (e) {
+      console.error('Erro ao atualizar contrato no Nhost:', e);
+    }
   };
 
   const deleteContract = async (id: string) => {

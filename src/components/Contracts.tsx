@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import { Plus, Search, FileText, Calendar, X, Trash2 } from 'lucide-react';
+import { Plus, Search, FileText, Calendar, X, Trash2, Edit } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import type { Contract } from '../types';
 
 export const Contracts: React.FC = () => {
-  const { customers, contracts, installments, addContract, deleteContract, formatCurrency } = useApp();
+  const { customers, contracts, installments, addContract, updateContract, deleteContract, formatCurrency } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -24,6 +26,7 @@ export const Contracts: React.FC = () => {
   const calculatedInstallmentAmount = formData.totalInstallments > 0 ? (calculatedTotalWithInterest / formData.totalInstallments) : 0;
 
   const handleOpenModal = () => {
+    setEditingContract(null);
     setFormData({
       customerId: customers[0]?.id || '',
       contractNumber: (contracts.length + 1).toString(),
@@ -38,6 +41,22 @@ export const Contracts: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const handleEditContract = (cnt: Contract) => {
+    setEditingContract(cnt);
+    setFormData({
+      customerId: cnt.customerId,
+      contractNumber: cnt.contractNumber,
+      startDate: cnt.startDate,
+      amount: cnt.amount,
+      interestRate: cnt.interestRate,
+      totalInstallments: cnt.totalInstallments,
+      periodDays: cnt.periodDays,
+      dailyLateFee: cnt.dailyLateFee,
+      notes: cnt.notes || ''
+    });
+    setIsModalOpen(true);
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.customerId) {
@@ -47,20 +66,38 @@ export const Contracts: React.FC = () => {
     const customer = customers.find(c => c.id === formData.customerId);
     if (!customer) return;
 
-    addContract({
-      contractNumber: formData.contractNumber,
-      customerId: formData.customerId,
-      customerName: customer.name,
-      startDate: formData.startDate,
-      amount: Number(formData.amount),
-      interestRate: Number(formData.interestRate),
-      periodDays: Number(formData.periodDays),
-      totalInstallments: Number(formData.totalInstallments),
-      installmentAmount: Number(calculatedInstallmentAmount.toFixed(2)),
-      totalToReceive: Number(calculatedTotalWithInterest.toFixed(2)),
-      dailyLateFee: Number(formData.dailyLateFee),
-      notes: formData.notes
-    });
+    if (editingContract) {
+      updateContract({
+        ...editingContract,
+        contractNumber: formData.contractNumber,
+        customerId: formData.customerId,
+        customerName: customer.name,
+        startDate: formData.startDate,
+        amount: Number(formData.amount),
+        interestRate: Number(formData.interestRate),
+        periodDays: Number(formData.periodDays),
+        totalInstallments: Number(formData.totalInstallments),
+        installmentAmount: Number(calculatedInstallmentAmount.toFixed(2)),
+        totalToReceive: Number(calculatedTotalWithInterest.toFixed(2)),
+        dailyLateFee: Number(formData.dailyLateFee),
+        notes: formData.notes
+      });
+    } else {
+      addContract({
+        contractNumber: formData.contractNumber,
+        customerId: formData.customerId,
+        customerName: customer.name,
+        startDate: formData.startDate,
+        amount: Number(formData.amount),
+        interestRate: Number(formData.interestRate),
+        periodDays: Number(formData.periodDays),
+        totalInstallments: Number(formData.totalInstallments),
+        installmentAmount: Number(calculatedInstallmentAmount.toFixed(2)),
+        totalToReceive: Number(calculatedTotalWithInterest.toFixed(2)),
+        dailyLateFee: Number(formData.dailyLateFee),
+        notes: formData.notes
+      });
+    }
 
     setIsModalOpen(false);
   };
@@ -119,17 +156,26 @@ export const Contracts: React.FC = () => {
                   </div>
                   <p className="text-sm font-semibold text-emerald-700 mt-1">{cnt.customerName}</p>
                 </div>
-                <button
-                  onClick={() => {
-                    if(confirm(`Deseja excluir o contrato Nº ${cnt.contractNumber}?`)) {
-                      deleteContract(cnt.id);
-                    }
-                  }}
-                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  title="Excluir Contrato"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleEditContract(cnt)}
+                    className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                    title="Editar Contrato"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if(confirm(`Deseja excluir o contrato Nº ${cnt.contractNumber}?`)) {
+                        deleteContract(cnt.id);
+                      }
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                    title="Excluir Contrato"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-100 text-xs">
@@ -165,14 +211,14 @@ export const Contracts: React.FC = () => {
         )}
       </div>
 
-      {/* Contract Creation Modal */}
+      {/* Contract Creation / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             
             <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-emerald-50/50">
               <h3 className="font-bold text-lg text-emerald-900">
-                Contrato: {formData.contractNumber}
+                {editingContract ? `Editar Contrato: ${editingContract.contractNumber}` : `Novo Contrato: ${formData.contractNumber}`}
               </h3>
               <button 
                 onClick={() => setIsModalOpen(false)}
@@ -322,7 +368,7 @@ export const Contracts: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm shadow-sm cursor-pointer"
                 >
-                  Criar Contrato
+                  {editingContract ? 'Salvar Alterações' : 'Criar Contrato'}
                 </button>
               </div>
             </form>
