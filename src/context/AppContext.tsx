@@ -333,7 +333,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const { customers: remoteCust, contracts: remoteCnt, installments: remoteInst } = data;
         if (remoteCust && Array.isArray(remoteCust)) {
           const filteredCust = currentUserId 
-            ? remoteCust.filter((c: any) => c.user_id === currentUserId)
+            ? remoteCust.filter((c: any) => !c.user_id || c.user_id === currentUserId)
             : remoteCust;
 
           const remoteMapped = filteredCust.map((c: any) => ({
@@ -352,12 +352,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             createdAt: c.created_at
           }));
 
-          setCustomers(remoteMapped);
+          setCustomers(prev => {
+            if (remoteMapped.length === 0) return prev;
+            const remoteIds = new Set(remoteMapped.map(c => c.id));
+            const localUnsynced = prev.filter(c => !remoteIds.has(c.id));
+            return [...remoteMapped, ...localUnsynced];
+          });
         }
 
         if (remoteCnt && Array.isArray(remoteCnt)) {
           const filteredCnt = currentUserId 
-            ? remoteCnt.filter((c: any) => c.user_id === currentUserId)
+            ? remoteCnt.filter((c: any) => !c.user_id || c.user_id === currentUserId)
             : remoteCnt;
 
           const remoteMappedCnt = filteredCnt.map((c: any) => ({
@@ -378,12 +383,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             createdAt: c.created_at
           }));
 
-          setContracts(remoteMappedCnt);
+          setContracts(prev => {
+            if (remoteMappedCnt.length === 0) return prev;
+            const remoteIds = new Set(remoteMappedCnt.map(c => c.id));
+            const localUnsynced = prev.filter(c => !remoteIds.has(c.id));
+            return [...remoteMappedCnt, ...localUnsynced];
+          });
         }
 
         if (remoteInst && Array.isArray(remoteInst)) {
           const filteredInst = currentUserId 
-            ? remoteInst.filter((i: any) => i.user_id === currentUserId)
+            ? remoteInst.filter((i: any) => !i.user_id || i.user_id === currentUserId)
             : remoteInst;
 
           const remoteMappedInst = filteredInst.map((i: any) => ({
@@ -399,7 +409,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             status: i.status
           }));
 
-          setInstallments(remoteMappedInst);
+          setInstallments(prev => {
+            if (remoteMappedInst.length === 0) return prev;
+            const remoteIds = new Set(remoteMappedInst.map(i => i.id));
+            const localUnsynced = prev.filter(i => !remoteIds.has(i.id));
+            return [...remoteMappedInst, ...localUnsynced];
+          });
         }
       }
     } catch (err) {
