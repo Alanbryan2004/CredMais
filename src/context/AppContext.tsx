@@ -995,10 +995,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (type === 'JUROS') {
+        const newPaidAmount = (inst.paidAmount || 0) + amountPaid;
+        updatedPaidAmount = newPaidAmount;
+        updatedPaidDate = todayStr;
         updatedDueDate = newDueDate || inst.dueDate;
         updatedStatus = 'A vencer';
         return {
           ...inst,
+          paidAmount: newPaidAmount,
+          paidDate: todayStr,
           dueDate: newDueDate || inst.dueDate,
           status: 'A vencer',
           history: updatedHistory
@@ -1006,16 +1011,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (type === 'PARCIAL') {
-        const newPaidAmount = inst.paidAmount + amountPaid;
+        const newPaidAmount = (inst.paidAmount || 0) + amountPaid;
         const isFullyPaid = newPaidAmount >= inst.originalAmount;
         updatedPaidAmount = newPaidAmount;
-        updatedPaidDate = isFullyPaid ? todayStr : undefined;
+        updatedPaidDate = todayStr;
         updatedDueDate = newDueDate || inst.dueDate;
         updatedStatus = isFullyPaid ? 'Pago' : 'Pago Parcial';
         return {
           ...inst,
           paidAmount: newPaidAmount,
-          paidDate: isFullyPaid ? todayStr : undefined,
+          paidDate: todayStr,
           dueDate: newDueDate || inst.dueDate,
           status: isFullyPaid ? 'Pago' : 'Pago Parcial',
           history: updatedHistory

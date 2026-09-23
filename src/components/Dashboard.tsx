@@ -20,8 +20,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
     let sum = 0;
     if (inst.history && inst.history.length > 0) {
       sum = inst.history.reduce((hAcc, h) => hAcc + (h.amountPaid || 0), 0);
-    } else if (inst.status === 'Pago') {
-      sum = inst.paidAmount || inst.originalAmount;
+    } else {
+      sum = inst.paidAmount || 0;
     }
     return acc + sum;
   }, 0);
@@ -57,10 +57,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
           const hMonth = h.date.slice(0, 7);
           return hMonth === m.key ? hAcc + (h.amountPaid || 0) : hAcc;
         }, 0);
-      } else if (inst.status === 'Pago') {
+      } else if (inst.paidAmount && inst.paidAmount > 0) {
         const paidDate = inst.paidDate || inst.dueDate;
         if (paidDate && paidDate.slice(0, 7) === m.key) {
-          monthPayment = inst.paidAmount || inst.originalAmount;
+          monthPayment = inst.paidAmount;
         }
       }
 
