@@ -104,22 +104,30 @@ export const Contracts: React.FC = () => {
 
   const [filterStatus, setFilterStatus] = useState<'ativos' | 'quitados'>('ativos');
 
+  // Helper to determine if contract is quitado (either by status or if all its installments are paid)
+  const isContractQuitado = (c: typeof contracts[0]) => {
+    if (c.status === 'Quitado') return true;
+    const contractInsts = installments.filter(i => i.contractId === c.id);
+    return contractInsts.length > 0 && contractInsts.every(i => i.status === 'Pago');
+  };
+
   const filteredContracts = contracts.filter(c => {
     const matchesSearch = c.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || c.contractNumber.includes(searchTerm);
     if (!matchesSearch) return false;
 
+    const quitado = isContractQuitado(c);
     if (filterStatus === 'quitados') {
-      return c.status === 'Quitado';
+      return quitado;
     } else {
-      return c.status !== 'Quitado';
+      return !quitado;
     }
   });
 
   const selectedContractDetail = contracts.find(c => c.id === selectedContractId);
   const selectedContractInstallments = installments.filter(i => i.contractId === selectedContractId);
 
-  const activeCount = contracts.filter(c => c.status !== 'Quitado').length;
-  const quitadosCount = contracts.filter(c => c.status === 'Quitado').length;
+  const activeCount = contracts.filter(c => !isContractQuitado(c)).length;
+  const quitadosCount = contracts.filter(c => isContractQuitado(c)).length;
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto pb-16">
@@ -198,8 +206,10 @@ export const Contracts: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-900 text-base">Contrato: {cnt.contractNumber}</span>
-                    <span className="text-xs px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-semibold">
-                      {cnt.status}
+                    <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                      isContractQuitado(cnt) ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {isContractQuitado(cnt) ? 'Quitado' : cnt.status}
                     </span>
                   </div>
                   <p className="text-sm font-semibold text-emerald-700 mt-1">{cnt.customerName}</p>
