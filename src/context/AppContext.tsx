@@ -1035,6 +1035,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         mutation UpdateInstallment($id: uuid!, $set: installments_set_input!) {
           update_installments_by_pk(pk_columns: { id: $id }, _set: $set) {
             id
+            contract_id
           }
         }
       `;
@@ -1046,8 +1047,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (updatedDueDate) setPayload.due_date = updatedDueDate;
 
       await executeGql(mutation, { id: installmentId, set: setPayload });
+
+      // Check if all installments for this contract are now paid
+      const targetInst = installments.find(i => i.id === installmentId);
+      if (targetInst) {
+        const contractId = targetInst.contractId;
+        const allContractInsts = installments.map(i => i.id === installmentId ? { ...i, status: updatedStatus } : i).filter(i => i.contractId === contractId);
+        const isContractFullyPaid = allContractInsts.length > 0 && allContractInsts.every(i => i.status === 'Pago');
+
+        if (isContractFullyPaid) {
+          setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'Quitado' } : c));
+          const updateContractGql = `
+            mutation MarkContractQuitado($id: uuid!) {
+              update_contracts_by_pk(pk_columns: { id: $id }, _set: { status: "Quitado" }) {
+                id
+              }
+            }
+          `;
+          await executeGql(updateContractGql, { id: contractId });
+        }
+      }
     } catch (e) {
-      console.error('Erro ao atualizar parcela no Nhost:', e);
+      console.error('Erro ao atualizar parcela/contrato no Nhost:', e);
     }
   };
 

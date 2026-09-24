@@ -102,17 +102,63 @@ export const Contracts: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const filteredContracts = contracts.filter(c => 
-    c.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.contractNumber.includes(searchTerm)
-  );
+  const [filterStatus, setFilterStatus] = useState<'ativos' | 'quitados'>('ativos');
+
+  const filteredContracts = contracts.filter(c => {
+    const matchesSearch = c.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || c.contractNumber.includes(searchTerm);
+    if (!matchesSearch) return false;
+
+    if (filterStatus === 'quitados') {
+      return c.status === 'Quitado';
+    } else {
+      return c.status !== 'Quitado';
+    }
+  });
 
   const selectedContractDetail = contracts.find(c => c.id === selectedContractId);
   const selectedContractInstallments = installments.filter(i => i.contractId === selectedContractId);
 
+  const activeCount = contracts.filter(c => c.status !== 'Quitado').length;
+  const quitadosCount = contracts.filter(c => c.status === 'Quitado').length;
+
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto pb-16">
       
+      {/* Status Filter Tabs */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setFilterStatus('ativos')}
+          className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            filterStatus === 'ativos'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span>Em Aberto / Ativos</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+            filterStatus === 'ativos' ? 'bg-emerald-700 text-white' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {activeCount}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setFilterStatus('quitados')}
+          className={`flex-1 py-2.5 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            filterStatus === 'quitados'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          <span>Contratos Quitados</span>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+            filterStatus === 'quitados' ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700'
+          }`}>
+            {quitadosCount}
+          </span>
+        </button>
+      </div>
+
       {/* Top Controls */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1">
@@ -137,8 +183,10 @@ export const Contracts: React.FC = () => {
       {/* Contracts List */}
       <div className="space-y-3">
         {filteredContracts.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center border border-gray-200 text-gray-500">
-            Nenhum contrato cadastrado.
+          <div className="bg-white rounded-2xl p-8 text-center border border-gray-200 text-gray-500 text-sm font-medium">
+            {filterStatus === 'quitados' 
+              ? 'Nenhum contrato quitado até o momento.' 
+              : 'Nenhum contrato ativo em aberto.'}
           </div>
         ) : (
           filteredContracts.map(cnt => (
